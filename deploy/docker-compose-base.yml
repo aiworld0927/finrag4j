@@ -1,0 +1,158 @@
+# FinRag4j 基础中间件服务（供include使用）
+# 包含: PostgreSQL 17, Redis Stack, MinIO, RocketMQ
+# 被 docker-compose.yml 通过 include 引用
+
+services:
+  # PostgreSQL 17 + PGVector
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ${POSTGRES_CONTAINER_NAME:-finrag4j-postgres}
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../backend/finrag4j-java/sql:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Stack Server（支持RedisJSON、RedisSearch等模块）
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: ${REDIS_CONTAINER_NAME:-finrag4j-redis}
+    env_file: .env
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MinIO
+  minio:
+    image: minio/minio:latest
+    container_name: ${MINIO_CONTAINER_NAME:-finrag4j-minio}
+    command: server /data --console-address ":9001"
+    env_file: .env
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # RocketMQ NameServer
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.2.0
+    container_name: ${ROCKETMQ_NAMESRV_CONTAINER_NAME:-finrag4j-rocketmq-namesrv}
+    command: sh mqnamesrv
+    env_file: .env
+    volumes:
+      - ./data/rocketmq/logs:/home/rocketmq/logs
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 9876 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # RocketMQ Broker
+  rocketmq-broker:
+    image: apache/rocketmq:5.2.0
+    container_name: ${ROCKETMQ_BROKER_CONTAINER_NAME:-finrag4j-rocketmq-broker}
+    command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
+    env_file: .env
+    volumes:
+      - ./data/rocketmq/logs:/home/rocketmq/logs
+      - ./data/rocketmq/store:/home/rocketmq/store
+    ports:
+      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
+      - "${ROCKETMQ_BROKER_PORT2:-10909}:10909"
+    networks:
+      - finrag4j-network
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 10911 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # RocketMQ Dashboard（管理控制台）
+  rocketmq-dashboard:
+    image: apacherocketmq/rocketmq-dashboard:latest
+    container_name: ${ROCKETMQ_DASHBOARD_CONTAINER_NAME:-finrag4j-rocketmq-dashboard}
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+    ports:
+      - "${ROCKETMQ_DASHBOARD_PORT:-8088}:8080"
+    networks:
+      - finrag4j-network
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Ollama大模型服务（已注释，使用外部固定地址 http://192.168.222.1:11434）
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ${OLLAMA_CONTAINER_NAME:-finrag4j-ollama}
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "${OLLAMA_PORT:-11434}:11434"
+  #   networks:
+  #     - finrag4j-network
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  # ollama_data:
+  #   driver: local
+
+networks:
+  finrag4j-network:
+    driver: bridge
+    name: ${NETWORK_NAME:-finrag4j-network}

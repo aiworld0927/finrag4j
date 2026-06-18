@@ -1,0 +1,118 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.project
+.classpath
+.settings/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.env.local
+.env.production
+requirements.txt.bak
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+dist/
+dist-ssr/
+*.local
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+.DS_Store
+Thumbs.db
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Application specific
+*.db
+*.sqlite
+*.sql
+config/application-local.yml
+config/application.yml
+application.properties
+*.key
+*.pem
+*.crt
+*.jks
+
+# Script outputs
+output/
+*.out
+*.err
+
+# Deploy artifacts
+*.tar
+*.gz
+*.tgz
+
+# Demo data
+demo-data/*.pdf
+demo-data/*.docx
+demo-data/*.xlsx
+demo-data/*.txt
+demo-data/*.json
+demo-data/*.xml
+
+# Logs
+logs/
+*.log
+*.trace
+
+# Cache
+.cache/
+.temp/
+.tmp/

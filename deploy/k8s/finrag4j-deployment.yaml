@@ -1,0 +1,576 @@
+# FinRag4j K8s部署配置
+# 适用于多租户集群场景
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finrag4j
+
+---
+# PostgreSQL Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: finrag4j
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "Vector@123"
+  POSTGRES_DB: "finrag4j"
+  POSTGRES_USER: "postgres"
+
+---
+# Redis Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: finrag4j
+type: Opaque
+stringData:
+  REDIS_PASSWORD: ""
+
+---
+# MinIO Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-secret
+  namespace: finrag4j
+type: Opaque
+stringData:
+  MINIO_ROOT_USER: "minioadmin"
+  MINIO_ROOT_PASSWORD: "minioadmin"
+
+---
+# PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+
+---
+# Redis PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# MinIO PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Deployment (PG 17 + PGVector)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: pgvector/pgvector:pg17
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: finrag4j
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+---
+# Redis Stack Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis/redis-stack-server:latest
+        ports:
+        - containerPort: 6379
+        env:
+        - name: REDIS_ARGS
+          value: "--appendonly yes"
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 3
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: finrag4j
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+---
+# MinIO Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        command: ["server", "/data", "--console-address", ":9001"]
+        ports:
+        - containerPort: 9000
+        - containerPort: 9001
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: MINIO_ROOT_USER
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: MINIO_ROOT_PASSWORD
+        volumeMounts:
+        - name: minio-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 15
+          periodSeconds: 5
+      volumes:
+      - name: minio-storage
+        persistentVolumeClaim:
+          claimName: minio-pvc
+
+---
+# MinIO Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: finrag4j
+spec:
+  selector:
+    app: minio
+  ports:
+  - port: 9000
+    targetPort: 9000
+  - port: 9001
+    targetPort: 9001
+
+---
+# Python Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-service
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: python-service
+  template:
+    metadata:
+      labels:
+        app: python-service
+    spec:
+      containers:
+      - name: python-service
+        image: finrag4j/python-service:1.0.0
+        ports:
+        - containerPort: 8001
+        env:
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+
+---
+# Python Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-service
+  namespace: finrag4j
+spec:
+  selector:
+    app: python-service
+  ports:
+  - port: 8001
+    targetPort: 8001
+
+---
+# Java Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-service
+  namespace: finrag4j
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: java-service
+  template:
+    metadata:
+      labels:
+        app: java-service
+    spec:
+      containers:
+      - name: java-service
+        image: finrag4j/java-service:1.0.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: MINIO_ROOT_USER
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: MINIO_ROOT_PASSWORD
+        - name: PYTHON_SERVICE_BASE_URL
+          value: "http://python-service:8001"
+        - name: OLLAMA_BASE_URL
+          value: "http://192.168.222.1:11434"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      - name: wait-for-minio
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z minio 9000; do echo waiting for minio; sleep 2; done;']
+      - name: wait-for-python
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z python-service 8001; do echo waiting for python-service; sleep 2; done;']
+
+---
+# Java Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-service
+  namespace: finrag4j
+spec:
+  selector:
+    app: java-service
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: finrag4j/frontend:1.0.0
+        ports:
+        - containerPort: 80
+        env:
+        - name: VUE_APP_API_BASE_URL
+          value: "http://java-service:8080/api"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-java
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z java-service 8080; do echo waiting for java-service; sleep 2; done;']
+
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: finrag4j
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finrag4j-ingress
+  namespace: finrag4j
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: finrag4j.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: java-service
+            port:
+              number: 8080
+      - path: /doc.html
+        pathType: Prefix
+        backend:
+          service:
+            name: java-service
+            port:
+              number: 8080
