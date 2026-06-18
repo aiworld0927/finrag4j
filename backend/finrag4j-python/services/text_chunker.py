@@ -2,9 +2,9 @@
 文本分块服务模块
 
 支持的分块策略：
-1. 监管文件分块策略 - 适用于法律法规、监管通知等正式文件
-2. 信贷合同分块策略 - 适用于贷款合同、担保协议等法律文件
-3. 内部通知分块策略 - 适用于内部公告、通知等简短文件
+1. regulatory - 监管文件策略（适用于法律法规、监管通知等正式文件）
+2. credit - 信贷合同策略（适用于贷款合同、担保协议等法律文件）
+3. official - 公文策略（适用于内部公告、通知等文件）
 """
 
 import jieba
@@ -14,9 +14,9 @@ from config import (
     DEFAULT_CHUNK_OVERLAP,
     MIN_CHUNK_SIZE,
     MAX_CHUNK_SIZE,
-    REGULATION_CHUNK_CONFIG,
-    CONTRACT_CHUNK_CONFIG,
-    NOTICE_CHUNK_CONFIG
+    REGULATORY_CHUNK_CONFIG,
+    CREDIT_CHUNK_CONFIG,
+    OFFICIAL_CHUNK_CONFIG
 )
 from utils.text_cleaner import split_sentences
 
@@ -30,12 +30,12 @@ class TextChunker:
         
         # 分块策略配置
         self.chunk_strategies = {
-            "regulation": REGULATION_CHUNK_CONFIG,
-            "contract": CONTRACT_CHUNK_CONFIG,
-            "notice": NOTICE_CHUNK_CONFIG
+            "regulatory": REGULATORY_CHUNK_CONFIG,
+            "credit": CREDIT_CHUNK_CONFIG,
+            "official": OFFICIAL_CHUNK_CONFIG
         }
     
-    def chunk_text(self, text: str, strategy: str = "regulation",
+    def chunk_text(self, text: str, strategy: str = "regulatory",
                    chunk_size: Optional[int] = None,
                    chunk_overlap: Optional[int] = None) -> Dict[str, Any]:
         """
@@ -43,7 +43,7 @@ class TextChunker:
         
         Args:
             text: 输入文本
-            strategy: 分块策略（regulation/contract/notice）
+            strategy: 分块策略（regulatory/credit/official）
             chunk_size: 分块大小（可选，覆盖策略默认值）
             chunk_overlap: 重叠大小（可选，覆盖策略默认值）
         
@@ -65,7 +65,7 @@ class TextChunker:
         # 获取策略配置
         strategy_config = self.chunk_strategies.get(strategy)
         if not strategy_config:
-            result["message"] = f"未知的分块策略: {strategy}"
+            result["message"] = f"未知的分块策略: {strategy}，可选值: regulatory, credit, official"
             return result
         
         # 确定分块参数

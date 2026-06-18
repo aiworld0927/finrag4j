@@ -1,6 +1,7 @@
 # FinRag4j 基础中间件服务（供include使用）
 # 包含: PostgreSQL 17, Redis Stack, MinIO, RocketMQ
 # 被 docker-compose.yml 通过 include 引用
+# 数据目录: ./data/xxx 本地目录挂载
 
 services:
   # PostgreSQL 17 + PGVector
@@ -9,7 +10,7 @@ services:
     container_name: ${POSTGRES_CONTAINER_NAME:-finrag4j-postgres}
     env_file: .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ../backend/finrag4j-java/sql:/docker-entrypoint-initdb.d
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -28,7 +29,7 @@ services:
     container_name: ${REDIS_CONTAINER_NAME:-finrag4j-redis}
     env_file: .env
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
     networks:
@@ -47,7 +48,7 @@ services:
     command: server /data --console-address ":9001"
     env_file: .env
     volumes:
-      - minio_data:/data
+      - ./data/minio:/data
     ports:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
@@ -65,18 +66,29 @@ services:
     image: apache/rocketmq:5.2.0
     container_name: ${ROCKETMQ_NAMESRV_CONTAINER_NAME:-finrag4j-rocketmq-namesrv}
     command: sh mqnamesrv
+    user: root
     env_file: .env
+    environment:
+      # 小内存配置
+      - JAVA_OPT=-Xms256m -Xmx512m -Xmn128m
     volumes:
-      - ./data/rocketmq/logs:/home/rocketmq/logs
+      - ./data/rocketmq/namesrv/logs:/home/rocketmq/logs
     ports:
       - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
     networks:
       - finrag4j-network
     healthcheck:
-      test: ["CMD", "sh", "-c", "nc -z localhost 9876 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "cat /home/rocketmq/logs/namesrv.log | grep -q 'boot success' && exit 0 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     restart: unless-stopped
 
   # RocketMQ Broker
@@ -84,10 +96,19 @@ services:
     image: apache/rocketmq:5.2.0
     container_name: ${ROCKETMQ_BROKER_CONTAINER_NAME:-finrag4j-rocketmq-broker}
     command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
+    user: root
     env_file: .env
+    environment:
+      # 小内存配置
+      - JAVA_OPT=-Xms512m -Xmx1g -Xmn256m
+      - BROKER_ID=0
+      - BROKER_NAME=broker-a
+      - DEFAULT_TOPIC_QUEUE_NUMS=4
+      - AUTO_CREATE_TOPIC_ENABLE=true
+      - AUTO_CREATE_GROUP_ENABLE=true
     volumes:
-      - ./data/rocketmq/logs:/home/rocketmq/logs
-      - ./data/rocketmq/store:/home/rocketmq/store
+      - ./data/rocketmq/broker/logs:/home/rocketmq/logs
+      - ./data/rocketmq/broker/store:/home/rocketmq/store
     ports:
       - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
       - "${ROCKETMQ_BROKER_PORT2:-10909}:10909"
@@ -95,12 +116,13 @@ services:
       - finrag4j-network
     depends_on:
       rocketmq-namesrv:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "sh", "-c", "nc -z localhost 10911 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     restart: unless-stopped
 
   # RocketMQ Dashboard（管理控制台）
@@ -128,7 +150,7 @@ services:
   #   image: ollama/ollama:latest
   #   container_name: ${OLLAMA_CONTAINER_NAME:-finrag4j-ollama}
   #   volumes:
-  #     - ollama_data:/root/.ollama
+  #     - ./data/ollama:/root/.ollama
   #   ports:
   #     - "${OLLAMA_PORT:-11434}:11434"
   #   networks:
@@ -141,16 +163,6 @@ services:
   #             count: 1
   #             capabilities: [gpu]
   #   restart: unless-stopped
-
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  minio_data:
-    driver: local
-  # ollama_data:
-  #   driver: local
 
 networks:
   finrag4j-network:

@@ -85,21 +85,21 @@ LOG_RETENTION = os.getenv("LOG_RETENTION", "1 month")
 # 分块策略配置
 # ---------------------------
 # 监管文件分块策略
-REGULATION_CHUNK_CONFIG = {
+REGULATORY_CHUNK_CONFIG = {
     "chunk_size": 600,
     "chunk_overlap": 150,
     "priority_sections": ["第一章", "第二章", "第三章", "第一节", "第二节", "第三条", "第四条"],
 }
 
 # 信贷合同分块策略
-CONTRACT_CHUNK_CONFIG = {
+CREDIT_CHUNK_CONFIG = {
     "chunk_size": 800,
     "chunk_overlap": 200,
     "priority_sections": ["第一条", "第二条", "第三条", "一、", "二、", "三、", "甲方", "乙方", "违约责任"],
 }
 
-# 内部通知分块策略
-NOTICE_CHUNK_CONFIG = {
+# 公文分块策略
+OFFICIAL_CHUNK_CONFIG = {
     "chunk_size": 400,
     "chunk_overlap": 80,
     "priority_sections": ["通知", "要求", "决定", "事项", "时间", "地点", "联系人"],
