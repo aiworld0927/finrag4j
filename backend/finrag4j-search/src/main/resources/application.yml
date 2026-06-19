@@ -1,0 +1,36 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: finrag4j-search
+
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:finrag4j_search}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+
+# LangChain4j配置
+langchain4j:
+  model:
+    base-url: ${LLM_BASE_URL:http://localhost:11434}
+    api-key: ${LLM_API_KEY:ollama}
+    model-name: ${LLM_MODEL_NAME:qwen2.5}
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.finrag4j.search.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+knife4j:
+  enable: true

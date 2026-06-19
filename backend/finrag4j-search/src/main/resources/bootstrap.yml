@@ -1,0 +1,18 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: finrag4j-search
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        file-extension: yml
+        shared-configs:
+          - data-id: finrag4j-common.yml
+            refresh: true

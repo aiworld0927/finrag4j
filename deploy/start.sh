@@ -55,6 +55,13 @@ echo "    组件: $COMPONENT"
 echo "    时间: $(date)"
 echo "=========================================="
 
+# 检查并创建数据目录
+echo ""
+echo "[0/2] 创建必要的数据目录..."
+mkdir -p ./data/{postgres,redis,minio,nacos,rocketmq/{namesrv,broker}}
+chmod -R 777 ./data
+echo "数据目录创建完成"
+
 # 启动基础中间件
 if [ "$COMPONENT" = "all" ] || [ "$COMPONENT" = "base" ]; then
     echo ""

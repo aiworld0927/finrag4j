@@ -1,0 +1,27 @@
+第一步：连接数据库，初始化用户，初始化表
+使用 nacos.sql  pg-schema.sql pg-grant-nacos-readwrite.sql
+
+第二步：更新：application.properties 配置
+spring.datasource.platform=postgresql
+# 数据库连接数
+db.num=1
+# 数据库连
+db.url.0=jdbc:postgresql://11.0.1.190:5432/nacos?characterEncoding=utf8&useSSL=false&serverTimezone=UTC
+# 数据库用户名
+db.user=nacos
+# 数据库密
+db.password=nacos
+# PostgreSQL JDBC 驱动
+db.pool.config.driverClassName=org.postgresql.Driver
+# 鉴权（必须）
+nacos.core.auth.enabled=true
+nacos.core.auth.server.identity.key=serverIdentity
+nacos.core.auth.server.identity.value=mySecureValue123
+nacos.core.auth.plugin.nacos.token.secret.key=VGhpc0lzTXlTZWNyZXRLZXlXaGljaFNob3VsZEJlMzJDaGFyYWN0ZXJzTGFyZ2U=
+
+第三步：powershell 执行启动命令：
+$env:nacos_core_auth_enabled="true"
+$env:nacos_core_auth_server_identity_key="serverIdentity"
+$env:nacos_core_auth_server_identity_value="mySecureValue123"
+$env:nacos_core_auth_plugin_nacos_token_secret_key="VGhpc0lzTXlTZWNyZXRLZXlXaGljaFNob3VsZEJlMzJDaGFyYWN0ZXJzTGFyZ2U="
+.\startup.cmd -m standalone

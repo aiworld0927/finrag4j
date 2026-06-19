@@ -3,15 +3,29 @@ FinRag4j Python 预处理微服务配置文件
 
 配置说明：
 - 所有配置项均可通过环境变量覆盖
+- 优先从 Nacos 配置中心获取配置
 - OCR模型首次运行会自动下载
 - 分块参数可根据实际业务需求调整
 """
 
 import os
+import json
 from dotenv import load_dotenv
+from loguru import logger
 
 # 加载环境变量
 load_dotenv()
+
+# ---------------------------
+# Nacos 配置中心配置
+# ---------------------------
+NACOS_ENABLED = os.getenv("NACOS_ENABLED", "true").lower() == "true"
+NACOS_HOST = os.getenv("NACOS_HOST", "localhost")
+NACOS_PORT = int(os.getenv("NACOS_PORT", 8848))
+NACOS_NAMESPACE = os.getenv("NACOS_NAMESPACE", "public")
+NACOS_GROUP = os.getenv("NACOS_GROUP", "DEFAULT_GROUP")
+NACOS_DATA_ID = os.getenv("NACOS_DATA_ID", "finrag4j-python.yml")
+NACOS_TIMEOUT = int(os.getenv("NACOS_TIMEOUT", 30))
 
 # ---------------------------
 # 服务基础配置
@@ -131,3 +145,107 @@ IMAGE_ENABLE_DENOISING = True
 
 # 是否启用图像增强
 IMAGE_ENABLE_ENHANCEMENT = True
+
+
+def load_config_from_nacos():
+    """
+    从 Nacos 配置中心加载配置
+    :return: 配置字典，如果加载失败返回空字典
+    """
+    if not NACOS_ENABLED:
+        logger.info("Nacos 配置中心已禁用，使用本地配置")
+        return {}
+
+    try:
+        from nacos import NacosClient
+        
+        logger.info(f"正在连接 Nacos 配置中心: {NACOS_HOST}:{NACOS_PORT}")
+        
+        client = NacosClient(
+            server_addresses=f"{NACOS_HOST}:{NACOS_PORT}",
+            namespace=NACOS_NAMESPACE,
+            timeout=NACOS_TIMEOUT
+        )
+        
+        # 获取配置
+        config = client.get_config(
+            data_id=NACOS_DATA_ID,
+            group=NACOS_GROUP
+        )
+        
+        if config:
+            logger.info(f"成功从 Nacos 加载配置: {NACOS_DATA_ID}")
+            try:
+                return json.loads(config)
+            except json.JSONDecodeError:
+                # 如果不是JSON格式，尝试按行解析
+                config_dict = {}
+                for line in config.split('\n'):
+                    line = line.strip()
+                    if line and '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        config_dict[key.strip()] = value.strip()
+                return config_dict
+        else:
+            logger.warning(f"从 Nacos 获取配置为空: {NACOS_DATA_ID}")
+            return {}
+            
+    except ImportError:
+        logger.warning("未安装 nacos-sdk-python，跳过 Nacos 配置加载")
+        return {}
+    except Exception as e:
+        logger.error(f"从 Nacos 加载配置失败: {e}")
+        return {}
+
+
+def merge_nacos_config():
+    """
+    合并 Nacos 配置到全局变量
+    """
+    global SERVER_PORT, SERVER_HOST, DEBUG_MODE
+    global OCR_MODEL_DIR, OCR_LANG, OCR_USE_GPU, OCR_TIMEOUT
+    global DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE
+    global MAX_FILE_SIZE, LOG_LEVEL, LOG_FILE
+    
+    if not NACOS_ENABLED:
+        return
+    
+    nacos_config = load_config_from_nacos()
+    if not nacos_config:
+        return
+    
+    # 合并配置（Nacos配置优先）
+    if 'server.port' in nacos_config:
+        SERVER_PORT = int(nacos_config['server.port'])
+    if 'server.host' in nacos_config:
+        SERVER_HOST = nacos_config['server.host']
+    if 'debug.mode' in nacos_config:
+        DEBUG_MODE = nacos_config['debug.mode'].lower() == "true"
+    
+    if 'ocr.model.dir' in nacos_config:
+        OCR_MODEL_DIR = nacos_config['ocr.model.dir']
+    if 'ocr.lang' in nacos_config:
+        OCR_LANG = nacos_config['ocr.lang']
+    if 'ocr.use.gpu' in nacos_config:
+        OCR_USE_GPU = nacos_config['ocr.use.gpu'].lower() == "true"
+    if 'ocr.timeout' in nacos_config:
+        OCR_TIMEOUT = int(nacos_config['ocr.timeout'])
+    
+    if 'chunk.default.size' in nacos_config:
+        DEFAULT_CHUNK_SIZE = int(nacos_config['chunk.default.size'])
+    if 'chunk.default.overlap' in nacos_config:
+        DEFAULT_CHUNK_OVERLAP = int(nacos_config['chunk.default.overlap'])
+    if 'chunk.min.size' in nacos_config:
+        MIN_CHUNK_SIZE = int(nacos_config['chunk.min.size'])
+    if 'chunk.max.size' in nacos_config:
+        MAX_CHUNK_SIZE = int(nacos_config['chunk.max.size'])
+    
+    if 'file.max.size' in nacos_config:
+        MAX_FILE_SIZE = int(nacos_config['file.max.size'])
+    
+    if 'log.level' in nacos_config:
+        LOG_LEVEL = nacos_config['log.level']
+    if 'log.file' in nacos_config:
+        LOG_FILE = nacos_config['log.file']
+    
+    logger.info("Nacos 配置已合并到全局变量")

@@ -24,11 +24,7 @@ class OCRService:
         # 初始化PaddleOCR
         self.ocr = PaddleOCR(
             use_angle_cls=True,
-            lang=OCR_LANG,
-            det_model_dir=os.path.join(OCR_MODEL_DIR, "det"),
-            rec_model_dir=os.path.join(OCR_MODEL_DIR, "rec"),
-            cls_model_dir=os.path.join(OCR_MODEL_DIR, "cls"),
-            use_gpu=OCR_USE_GPU
+            lang=OCR_LANG
         )
     
     def recognize_image(self, image_path: str, preprocess: bool = True) -> Dict[str, Any]:
@@ -61,7 +57,7 @@ class OCRService:
                 temp_path = image_path
             
             # 使用PaddleOCR识别
-            ocr_result = self.ocr.ocr(temp_path, cls=True)
+            ocr_result = self.ocr.ocr(temp_path)
             
             # 提取文本和位置信息
             text_parts = []
@@ -155,13 +151,14 @@ class OCRService:
         
         return result
     
-    def recognize_bytes(self, file_bytes: bytes, file_type: str = "image") -> Dict[str, Any]:
+    def recognize_bytes(self, file_bytes: bytes, file_type: str = "image", preprocess: bool = True) -> Dict[str, Any]:
         """
         识别文件字节流
         
         Args:
             file_bytes: 文件字节内容
             file_type: 文件类型（image或pdf）
+            preprocess: 是否进行图像预处理
         
         Returns:
             识别结果
@@ -174,9 +171,9 @@ class OCRService:
         
         try:
             if file_type == "image":
-                return self.recognize_image(temp_path)
+                return self.recognize_image(temp_path, preprocess)
             elif file_type == "pdf":
-                return self.recognize_pdf(temp_path)
+                return self.recognize_pdf(temp_path, preprocess)
             else:
                 return {"success": False, "message": f"不支持的文件类型: {file_type}"}
         finally:

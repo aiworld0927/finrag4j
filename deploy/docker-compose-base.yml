@@ -1,17 +1,27 @@
 # FinRag4j 基础中间件服务（供include使用）
-# 包含: PostgreSQL 17, Redis Stack, MinIO, RocketMQ
+# 包含: PostgreSQL 17, Redis Stack, MinIO, RocketMQ, Nacos
 # 被 docker-compose.yml 通过 include 引用
 # 数据目录: ./data/xxx 本地目录挂载
+# 依赖关系: Nacos -> PostgreSQL, RocketMQ Broker -> NameServer
 
 services:
+  # ========================================
+  # 第1层: 基础服务（无依赖）
+  # ========================================
+
   # PostgreSQL 17 + PGVector
   postgres:
     image: pgvector/pgvector:pg17
     container_name: ${POSTGRES_CONTAINER_NAME:-finrag4j-postgres}
     env_file: .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-nacos}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-nacos}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
-      - ../backend/finrag4j-java/sql:/docker-entrypoint-initdb.d
+      - ./sql/01_create_nacos_user.sql:/docker-entrypoint-initdb.d/01_create_nacos_user.sql
+      - ./sql/02_pg_schema.sql:/docker-entrypoint-initdb.d/02_pg_schema.sql
+      - ./sql/03_pg_grant.sql:/docker-entrypoint-initdb.d/03_pg_grant.sql
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
@@ -21,6 +31,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   # Redis Stack Server（支持RedisJSON、RedisSearch等模块）
@@ -39,9 +50,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
 
-  # MinIO
+  # MinIO 对象存储
   minio:
     image: minio/minio:latest
     container_name: ${MINIO_CONTAINER_NAME:-finrag4j-minio}
@@ -59,6 +71,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # RocketMQ NameServer
@@ -69,8 +82,7 @@ services:
     user: root
     env_file: .env
     environment:
-      # 小内存配置
-      - JAVA_OPT=-Xms256m -Xmx512m -Xmn128m
+      - JAVA_OPT_EXT=${ROCKETMQ_NAMESRV_JAVA_OPT:-Xms128m -Xmx256m -Xmn64m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m}
     volumes:
       - ./data/rocketmq/namesrv/logs:/home/rocketmq/logs
     ports:
@@ -78,20 +90,64 @@ services:
     networks:
       - finrag4j-network
     healthcheck:
-      test: ["CMD-SHELL", "cat /home/rocketmq/logs/namesrv.log | grep -q 'boot success' && exit 0 || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "pgrep java || exit 1"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: ${ROCKETMQ_NAMESRV_MEMORY_LIMIT:-384M}
+        reservations:
+          memory: ${ROCKETMQ_NAMESRV_MEMORY_RESERVE:-128M}
+    restart: unless-stopped
+
+  # ========================================
+  # 第2层: 依赖型中间件
+  # ========================================
+
+  # Nacos 服务注册与配置中心（依赖 PostgreSQL）
+  nacos:
+    image: nacos/nacos-server:v3.2.2
+    container_name: ${NACOS_CONTAINER_NAME:-finrag4j-nacos}
+    env_file: .env
+    environment:
+      - MODE=standalone
+      - NACOS_SERVER_PORT=${NACOS_PORT:-8080}
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+      - JVM_XMN=128m
+    volumes:
+      - ./data/nacos/logs:/home/nacos/logs
+      - ./data/nacos/data:/home/nacos/data
+      # ★★★ 挂载自定义配置文件（覆盖默认 application.properties）★★★
+      - ./nacos-config/application.properties:/home/nacos/conf/application.properties:ro
+    ports:
+      - "${NACOS_PORT:-8080}:8080"
+      - "${NACOS_PORT_8848:-8848}:8848"
+      - "${NACOS_PORT_GRPC:-9848}:9848"
+      - "${NACOS_PORT_GRPC2:-9849}:9849"
+    networks:
+      - finrag4j-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${NACOS_PORT:-8080}/nacos/v3/admin/core/state/readiness"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
         reservations:
           memory: 256M
     restart: unless-stopped
 
-  # RocketMQ Broker
+  # RocketMQ Broker（依赖 NameServer）
   rocketmq-broker:
     image: apache/rocketmq:5.2.0
     container_name: ${ROCKETMQ_BROKER_CONTAINER_NAME:-finrag4j-rocketmq-broker}
@@ -99,8 +155,7 @@ services:
     user: root
     env_file: .env
     environment:
-      # 小内存配置
-      - JAVA_OPT=-Xms512m -Xmx1g -Xmn256m
+      - JAVA_OPT_EXT=${ROCKETMQ_BROKER_JAVA_OPT:-Xms256m -Xmx512m -Xmn128m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m}
       - BROKER_ID=0
       - BROKER_NAME=broker-a
       - DEFAULT_TOPIC_QUEUE_NUMS=4
@@ -116,16 +171,20 @@ services:
       - finrag4j-network
     depends_on:
       rocketmq-namesrv:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: ${ROCKETMQ_BROKER_MEMORY_LIMIT:-768M}
         reservations:
-          memory: 512M
+          memory: ${ROCKETMQ_BROKER_MEMORY_RESERVE:-256M}
     restart: unless-stopped
 
-  # RocketMQ Dashboard（管理控制台）
+  # ========================================
+  # 第3层: 辅助服务
+  # ========================================
+
+  # RocketMQ Dashboard（依赖 NameServer）
   rocketmq-dashboard:
     image: apacherocketmq/rocketmq-dashboard:latest
     container_name: ${ROCKETMQ_DASHBOARD_CONTAINER_NAME:-finrag4j-rocketmq-dashboard}
@@ -143,26 +202,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
-
-  # Ollama大模型服务（已注释，使用外部固定地址 http://192.168.222.1:11434）
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: ${OLLAMA_CONTAINER_NAME:-finrag4j-ollama}
-  #   volumes:
-  #     - ./data/ollama:/root/.ollama
-  #   ports:
-  #     - "${OLLAMA_PORT:-11434}:11434"
-  #   networks:
-  #     - finrag4j-network
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [gpu]
-  #   restart: unless-stopped
 
 networks:
   finrag4j-network:

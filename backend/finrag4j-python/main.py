@@ -9,6 +9,10 @@ FinRag4j Python 预处理微服务入口文件
 5. 文本分块（金融三策略）
 
 技术栈：FastAPI + Uvicorn + PaddleOCR + jieba
+
+配置来源：
+- 环境变量
+- Nacos配置中心（优先）
 """
 
 import os
@@ -30,9 +34,16 @@ from config import (
     LOG_FILE,
     LOG_LEVEL,
     LOG_ROTATION,
-    LOG_RETENTION
+    LOG_RETENTION,
+    merge_nacos_config,
+    NACOS_ENABLED,
+    NACOS_HOST,
+    NACOS_PORT
 )
 from services import document_parser, ocr_service, text_chunker, text_cleaner
+
+# 从 Nacos 加载配置（启动时执行）
+merge_nacos_config()
 
 # 配置日志
 logger.remove()
@@ -51,7 +62,7 @@ logger.add(
 # 创建FastAPI应用
 app = FastAPI(
     title="FinRag4j Python预处理微服务",
-    description="金融文档解析、OCR识别、文本清洗、文本分块服务",
+    description="金融文档解析、OCR识别、文本清洗、文本分块服务（适配Nacos配置中心）",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -81,6 +92,9 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
     message: str
+    nacos_enabled: bool
+    nacos_host: Optional[str]
+    nacos_port: Optional[int]
 
 
 class ParseFileResponse(BaseModel):
@@ -151,13 +165,19 @@ async def health_check():
     - timestamp: 当前时间戳
     - version: 服务版本
     - message: 状态消息
+    - nacos_enabled: 是否启用Nacos配置中心
+    - nacos_host: Nacos服务地址
+    - nacos_port: Nacos服务端口
     """
     return {
         "status": "healthy",
         "service": "finrag4j-python",
         "timestamp": datetime.datetime.now().isoformat(),
         "version": "1.0.0",
-        "message": "服务运行正常"
+        "message": "服务运行正常",
+        "nacos_enabled": NACOS_ENABLED,
+        "nacos_host": NACOS_HOST if NACOS_ENABLED else None,
+        "nacos_port": NACOS_PORT if NACOS_ENABLED else None
     }
 
 

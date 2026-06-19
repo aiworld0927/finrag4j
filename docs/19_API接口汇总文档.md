@@ -64,7 +64,7 @@ Authorization: Bearer <token>
       "id": 1,
       "username": "admin",
       "nickname": "管理员",
-      "email": "admin@example.com",
+      "email": "wangjn1130@163.com",
       "status": "active"
     }
   ]
@@ -82,7 +82,7 @@ Authorization: Bearer <token>
   "username": "zhangsan",
   "password": "password123",
   "nickname": "张三",
-  "email": "zhangsan@example.com",
+  "email": "wangjn1130@163.com",
   "phone": "13800138000"
 }
 ```
@@ -96,7 +96,7 @@ Authorization: Bearer <token>
 
 {
   "nickname": "新昵称",
-  "email": "new@example.com"
+  "email": "wangjn1130@163.com"
 }
 ```
 

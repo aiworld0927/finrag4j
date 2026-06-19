@@ -1,0 +1,22 @@
+# Nacos Configuration ConfigMap
+# 用于 Kubernetes 部署的 Nacos 配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nacos-config
+data:
+  application.properties: |
+    # ============ PostgreSQL 数据源配置 ============
+    spring.datasource.platform=postgresql
+    db.num=1
+    db.url.0=jdbc:postgresql://postgres:5432/nacos?characterEncoding=utf8&useSSL=false&serverTimezone=UTC&currentSchema=public
+    db.user=nacos
+    db.password=nacos
+    db.pool.config.driverClassName=org.postgresql.Driver
+
+    # ============ Nacos 3.x 鉴权配置（必须）============
+    nacos.core.auth.enabled=true
+    nacos.core.auth.server.identity.key=serverIdentity
+    nacos.core.auth.server.identity.value=mySecureValue123
+    nacos.core.auth.plugin.nacos.token.secret.key=VGhpc0lzTXlTZWNyZXRLZXlXaGljaFNob3VsZEJlMzJDaGFyYWN0ZXJzTGFyZ2U=
+    nacos.core.auth.caching.enabled=true

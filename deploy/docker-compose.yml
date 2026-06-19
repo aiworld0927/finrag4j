@@ -1,4 +1,4 @@
-# FinRag4j 完整服务配置
+# FinRag4j 微服务架构完整服务配置
 # 通过 include 方式包含基础中间件配置
 # 启动: docker-compose up -d (自动加载 .env 文件)
 # 版本: Docker Compose 3.8+ (支持 include 语法)
@@ -7,13 +7,17 @@ include:
   - ./docker-compose-base.yml
 
 services:
-  # Python预处理服务
+  # Python预处理服务（适配Nacos）
   python-service:
     build:
       context: ../backend/finrag4j-python
       dockerfile: Dockerfile
     container_name: ${PYTHON_CONTAINER_NAME:-finrag4j-python}
     env_file: .env
+    environment:
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - NACOS_NAMESPACE=${NACOS_NAMESPACE:-public}
     ports:
       - "${PYTHON_SERVICE_PORT:-8001}:8001"
     networks:
@@ -25,31 +29,101 @@ services:
       retries: 3
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      nacos:
         condition: service_healthy
 
-  # Java主服务
-  java-service:
+  # Gateway 网关服务
+  gateway:
     build:
-      context: ../backend/finrag4j-java
-      dockerfile: Dockerfile
-    container_name: ${JAVA_CONTAINER_NAME:-finrag4j-java}
+      context: ../backend
+      dockerfile: finrag4j-gateway/Dockerfile
+    container_name: ${GATEWAY_CONTAINER_NAME:-finrag4j-gateway}
     env_file: .env
     environment:
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.222.1:11434}
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
     ports:
-      - "${JAVA_SERVICE_PORT:-8080}:8080"
+      - "${GATEWAY_PORT:-8085}:8080"
     networks:
       - finrag4j-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${JAVA_SERVICE_PORT:-8080}/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${GATEWAY_PORT:-8085}/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
     restart: unless-stopped
     depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Auth 认证服务
+  auth-service:
+    build:
+      context: ../backend
+      dockerfile: finrag4j-auth/Dockerfile
+    container_name: ${AUTH_CONTAINER_NAME:-finrag4j-auth}
+    env_file: .env
+    environment:
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=finrag4j_auth
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+    ports:
+      - "${AUTH_PORT:-8081}:8081"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${AUTH_PORT:-8081}/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Document 文档服务
+  document-service:
+    build:
+      context: ../backend
+      dockerfile: finrag4j-document/Dockerfile
+    container_name: ${DOCUMENT_CONTAINER_NAME:-finrag4j-document}
+    env_file: .env
+    environment:
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=finrag4j_document
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - MINIO_ENDPOINT=http://minio:9000
+      - ROCKETMQ_HOST=rocketmq-namesrv
+      - PYTHON_SERVICE_URL=http://python-service:8001
+    ports:
+      - "${DOCUMENT_PORT:-8082}:8082"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${DOCUMENT_PORT:-8082}/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -57,6 +131,73 @@ services:
       minio:
         condition: service_healthy
       python-service:
+        condition: service_healthy
+
+  # Search 检索服务
+  search-service:
+    build:
+      context: ../backend
+      dockerfile: finrag4j-search/Dockerfile
+    container_name: ${SEARCH_CONTAINER_NAME:-finrag4j-search}
+    env_file: .env
+    environment:
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=finrag4j_search
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+    ports:
+      - "${SEARCH_PORT:-8083}:8083"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${SEARCH_PORT:-8083}/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Agent 服务
+  agent-service:
+    build:
+      context: ../backend
+      dockerfile: finrag4j-agent/Dockerfile
+    container_name: ${AGENT_CONTAINER_NAME:-finrag4j-agent}
+    env_file: .env
+    environment:
+      - NACOS_HOST=nacos
+      - NACOS_PORT=${NACOS_PORT:-8080}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=finrag4j_agent
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - ROCKETMQ_HOST=rocketmq-namesrv
+    ports:
+      - "${AGENT_PORT:-8086}:8084"
+    networks:
+      - finrag4j-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${AGENT_PORT:-8086}/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # 前端服务
@@ -71,6 +212,6 @@ services:
     networks:
       - finrag4j-network
     depends_on:
-      java-service:
+      gateway:
         condition: service_healthy
     restart: unless-stopped

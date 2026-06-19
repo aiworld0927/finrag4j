@@ -16,10 +16,6 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 import PyPDF2
-from unstructured.partition.pdf import partition_pdf
-from unstructured.partition.docx import partition_docx
-from unstructured.partition.xlsx import partition_xlsx
-from unstructured.partition.text import partition_text
 from utils.text_cleaner import clean_text
 
 
@@ -130,44 +126,26 @@ class DocumentParser:
         }
         
         try:
-            # 使用unstructured解析PDF
-            elements = partition_pdf(file_path)
-            
-            text_parts = []
-            table_parts = []
-            
-            for element in elements:
-                if hasattr(element, 'text'):
-                    text_parts.append(element.text)
-                elif hasattr(element, 'metadata') and element.metadata.get('category') == 'Table':
-                    table_parts.append(str(element))
-            
-            result["text"] = clean_text("\n".join(text_parts))
-            result["tables"] = table_parts
-            
-            # 同时使用PyPDF2获取页面信息
-            with open(file_path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
-                result["pages"] = [
-                    {"page_number": i + 1, "text": clean_text(page.extract_text())}
-                    for i, page in enumerate(reader.pages)
-                ]
-        
-        except Exception as e:
-            # 降级使用PyPDF2
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 page_texts = []
-                for page in reader.pages:
+                pages = []
+                
+                for i, page in enumerate(reader.pages):
                     text = page.extract_text()
                     if text:
                         page_texts.append(text)
+                        pages.append({
+                            "page_number": i + 1,
+                            "text": clean_text(text)
+                        })
                 
                 result["text"] = clean_text("\n".join(page_texts))
-                result["pages"] = [
-                    {"page_number": i + 1, "text": clean_text(page.extract_text())}
-                    for i, page in enumerate(reader.pages)
-                ]
+                result["pages"] = pages
+        
+        except Exception as e:
+            result["text"] = ""
+            result["message"] = f"解析失败: {str(e)}"
         
         return result
     
@@ -187,43 +165,25 @@ class DocumentParser:
             "paragraphs": []
         }
         
-        try:
-            # 使用unstructured解析
-            elements = partition_docx(file_path)
-            
-            text_parts = []
-            table_parts = []
-            
-            for element in elements:
-                if hasattr(element, 'text'):
-                    text_parts.append(element.text)
-                elif hasattr(element, 'metadata') and element.metadata.get('category') == 'Table':
-                    table_parts.append(str(element))
-            
-            result["text"] = clean_text("\n".join(text_parts))
-            result["tables"] = table_parts
-            
-        except Exception as e:
-            # 降级使用python-docx
-            doc = Document(file_path)
-            
-            paragraphs = []
-            tables = []
-            
-            for para in doc.paragraphs:
-                if para.text.strip():
-                    paragraphs.append(para.text)
-            
-            for table in doc.tables:
-                table_data = []
-                for row in table.rows:
-                    row_data = [cell.text.strip() for cell in row.cells]
-                    table_data.append(row_data)
-                tables.append(table_data)
-            
-            result["text"] = clean_text("\n".join(paragraphs))
-            result["tables"] = tables
-            result["paragraphs"] = paragraphs
+        doc = Document(file_path)
+        
+        paragraphs = []
+        tables = []
+        
+        for para in doc.paragraphs:
+            if para.text.strip():
+                paragraphs.append(para.text)
+        
+        for table in doc.tables:
+            table_data = []
+            for row in table.rows:
+                row_data = [cell.text.strip() for cell in row.cells]
+                table_data.append(row_data)
+            tables.append(table_data)
+        
+        result["text"] = clean_text("\n".join(paragraphs))
+        result["tables"] = tables
+        result["paragraphs"] = paragraphs
         
         return result
     
@@ -237,8 +197,6 @@ class DocumentParser:
         Returns:
             解析结果
         """
-        # .doc文件需要额外依赖，这里返回基本信息
-        # 建议用户转换为.docx格式或使用LibreOffice转换
         return {
             "text": "",
             "tables": [],
@@ -260,45 +218,32 @@ class DocumentParser:
             "text": ""
         }
         
-        try:
-            # 使用unstructured解析
-            elements = partition_xlsx(file_path)
+        wb = load_workbook(file_path, read_only=True)
+        
+        sheets_data = []
+        all_text = []
+        
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            rows = []
             
-            text_parts = []
-            for element in elements:
-                if hasattr(element, 'text'):
-                    text_parts.append(element.text)
+            for row in sheet.iter_rows(values_only=True):
+                row_data = []
+                for cell in row:
+                    if cell is not None:
+                        cell_value = str(cell)
+                        row_data.append(cell_value)
+                        all_text.append(cell_value)
+                if any(row_data):
+                    rows.append(row_data)
             
-            result["text"] = clean_text("\n".join(text_parts))
-            
-        except Exception as e:
-            # 降级使用openpyxl
-            wb = load_workbook(file_path, read_only=True)
-            
-            sheets_data = []
-            all_text = []
-            
-            for sheet_name in wb.sheetnames:
-                sheet = wb[sheet_name]
-                rows = []
-                
-                for row in sheet.iter_rows(values_only=True):
-                    row_data = []
-                    for cell in row:
-                        if cell is not None:
-                            cell_value = str(cell)
-                            row_data.append(cell_value)
-                            all_text.append(cell_value)
-                    if any(row_data):
-                        rows.append(row_data)
-                
-                sheets_data.append({
-                    "name": sheet_name,
-                    "rows": rows
-                })
-            
-            result["sheets"] = sheets_data
-            result["text"] = clean_text("\n".join(all_text))
+            sheets_data.append({
+                "name": sheet_name,
+                "rows": rows
+            })
+        
+        result["sheets"] = sheets_data
+        result["text"] = clean_text("\n".join(all_text))
         
         return result
     

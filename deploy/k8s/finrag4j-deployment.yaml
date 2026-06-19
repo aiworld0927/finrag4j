@@ -1,5 +1,6 @@
 # FinRag4j K8s部署配置
 # 适用于多租户集群场景
+# 依赖关系: Nacos -> PostgreSQL, RocketMQ Broker -> NameServer
 
 ---
 # Namespace
@@ -9,6 +10,10 @@ metadata:
   name: finrag4j
 
 ---
+# ========================================
+# Secrets
+# ========================================
+
 # PostgreSQL Secret
 apiVersion: v1
 kind: Secret
@@ -17,9 +22,9 @@ metadata:
   namespace: finrag4j
 type: Opaque
 stringData:
-  POSTGRES_PASSWORD: "Vector@123"
-  POSTGRES_DB: "finrag4j"
-  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "nacos"
+  POSTGRES_DB: "nacos"
+  POSTGRES_USER: "nacos"
 
 ---
 # Redis Secret
@@ -45,6 +50,23 @@ stringData:
   MINIO_ROOT_PASSWORD: "minioadmin"
 
 ---
+# Nacos Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nacos-secret
+  namespace: finrag4j
+type: Opaque
+stringData:
+  NACOS_AUTH_TOKEN: "SecretKey012345678901234567890123456789012345678901234567890123456789"
+  NACOS_AUTH_IDENTITY_KEY: "serverIdentity"
+  NACOS_AUTH_IDENTITY_VALUE: "security"
+
+---
+# ========================================
+# PVCs
+# ========================================
+
 # PostgreSQL PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -90,6 +112,55 @@ spec:
   storageClassName: standard
 
 ---
+# Nacos PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nacos-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# RocketMQ NameServer PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rocketmq-namesrv-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+# RocketMQ Broker PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rocketmq-broker-pvc
+  namespace: finrag4j
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+
+---
+# ========================================
+# 第1层: 基础服务（无依赖）
+# ========================================
+
 # PostgreSQL Deployment (PG 17 + PGVector)
 apiVersion: apps/v1
 kind: Deployment
@@ -309,6 +380,249 @@ spec:
     targetPort: 9001
 
 ---
+# RocketMQ NameServer Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketmq-namesrv
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketmq-namesrv
+  template:
+    metadata:
+      labels:
+        app: rocketmq-namesrv
+    spec:
+      containers:
+      - name: namesrv
+        image: apache/rocketmq:5.2.0
+        command: ["sh", "mqnamesrv"]
+        ports:
+        - containerPort: 9876
+        env:
+        - name: JAVA_OPT_EXT
+          value: "-Xms128m -Xmx256m -Xmn64m"
+        volumeMounts:
+        - name: namesrv-storage
+          mountPath: /home/rocketmq/logs
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "384Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command: ["pgrep", "java"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["pgrep", "java"]
+          initialDelaySeconds: 20
+          periodSeconds: 5
+      volumes:
+      - name: namesrv-storage
+        persistentVolumeClaim:
+          claimName: rocketmq-namesrv-pvc
+
+---
+# RocketMQ NameServer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-namesrv
+  namespace: finrag4j
+spec:
+  selector:
+    app: rocketmq-namesrv
+  ports:
+  - port: 9876
+    targetPort: 9876
+
+---
+# ========================================
+# 第2层: 依赖型中间件
+# ========================================
+
+# Nacos Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nacos
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nacos
+  template:
+    metadata:
+      labels:
+        app: nacos
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+      - name: nacos
+        image: nacos/nacos-server:v3.2.2
+        ports:
+        - containerPort: 8080
+        - containerPort: 9848
+        - containerPort: 9849
+        env:
+        - name: MODE
+          value: "standalone"
+        - name: JVM_XMS
+          value: "256m"
+        - name: JVM_XMX
+          value: "512m"
+        - name: JVM_XMN
+          value: "128m"
+        volumeMounts:
+        - name: nacos-storage
+          mountPath: /home/nacos/logs
+        - name: nacos-config
+          mountPath: /home/nacos/conf/application.properties
+          subPath: application.properties
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "768Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /nacos/v3/admin/core/state/readiness
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /nacos/v3/admin/core/state/readiness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+      volumes:
+      - name: nacos-storage
+        persistentVolumeClaim:
+          claimName: nacos-pvc
+      - name: nacos-config
+        configMap:
+          name: nacos-config
+
+---
+# Nacos Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos
+  namespace: finrag4j
+spec:
+  selector:
+    app: nacos
+  ports:
+  - port: 8080
+    targetPort: 8080
+  - port: 9848
+    targetPort: 9848
+  - port: 9849
+    targetPort: 9849
+
+---
+# RocketMQ Broker Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketmq-broker
+  namespace: finrag4j
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketmq-broker
+  template:
+    metadata:
+      labels:
+        app: rocketmq-broker
+    spec:
+      initContainers:
+      - name: wait-for-namesrv
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z rocketmq-namesrv 9876; do echo waiting for namesrv; sleep 2; done;']
+      containers:
+      - name: broker
+        image: apache/rocketmq:5.2.0
+        command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "--enable-proxy"]
+        ports:
+        - containerPort: 10911
+        - containerPort: 10909
+        env:
+        - name: JAVA_OPT_EXT
+          value: "-Xms256m -Xmx512m -Xmn128m"
+        - name: BROKER_ID
+          value: "0"
+        - name: BROKER_NAME
+          value: "broker-a"
+        - name: AUTO_CREATE_TOPIC_ENABLE
+          value: "true"
+        volumeMounts:
+        - name: broker-storage
+          mountPath: /home/rocketmq/logs
+        - name: broker-store
+          mountPath: /home/rocketmq/store
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "768Mi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command: ["pgrep", "java"]
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["pgrep", "java"]
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: broker-storage
+        persistentVolumeClaim:
+          claimName: rocketmq-broker-pvc
+      - name: broker-store
+        emptyDir: {}
+
+---
+# RocketMQ Broker Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-broker
+  namespace: finrag4j
+spec:
+  selector:
+    app: rocketmq-broker
+  ports:
+  - port: 10911
+    targetPort: 10911
+  - port: 10909
+    targetPort: 10909
+
+---
+# ========================================
+# 第3层: 业务服务
+# ========================================
+
 # Python Service Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -325,6 +639,16 @@ spec:
       labels:
         app: python-service
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
       containers:
       - name: python-service
         image: finrag4j/python-service:1.0.0
@@ -339,6 +663,10 @@ spec:
           value: "redis"
         - name: REDIS_PORT
           value: "6379"
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: NACOS_PORT
+          value: "8080"
         resources:
           requests:
             memory: "1Gi"
@@ -358,13 +686,6 @@ spec:
             port: 8001
           initialDelaySeconds: 15
           periodSeconds: 5
-      initContainers:
-      - name: wait-for-postgres
-        image: busybox:1.32
-        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
-      - name: wait-for-redis
-        image: busybox:1.32
-        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
 
 ---
 # Python Service
@@ -381,61 +702,50 @@ spec:
     targetPort: 8001
 
 ---
-# Java Service Deployment
+# Gateway Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: java-service
+  name: gateway
   namespace: finrag4j
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
-      app: java-service
+      app: gateway
   template:
     metadata:
       labels:
-        app: java-service
+        app: gateway
     spec:
+      initContainers:
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
       containers:
-      - name: java-service
-        image: finrag4j/java-service:1.0.0
+      - name: gateway
+        image: finrag4j/gateway:1.0.0
         ports:
-        - containerPort: 8080
+        - containerPort: 8085
         env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "prod"
-        - name: POSTGRES_HOST
-          value: "postgres"
-        - name: POSTGRES_PORT
-          value: "5432"
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: NACOS_PORT
+          value: "8080"
         - name: REDIS_HOST
           value: "redis"
         - name: REDIS_PORT
           value: "6379"
-        - name: MINIO_ENDPOINT
-          value: "http://minio:9000"
-        - name: MINIO_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-secret
-              key: MINIO_ROOT_USER
-        - name: MINIO_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-secret
-              key: MINIO_ROOT_PASSWORD
-        - name: PYTHON_SERVICE_BASE_URL
-          value: "http://python-service:8001"
-        - name: OLLAMA_BASE_URL
-          value: "http://192.168.222.1:11434"
         resources:
           requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
             memory: "2Gi"
             cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -448,7 +758,115 @@ spec:
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 5
+
+---
+# Gateway Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: finrag4j
+spec:
+  selector:
+    app: gateway
+  ports:
+  - port: 8085
+    targetPort: 8085
+
+---
+# Auth Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
       initContainers:
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      containers:
+      - name: auth-service
+        image: finrag4j/auth-service:1.0.0
+        ports:
+        - containerPort: 8081
+        env:
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: REDIS_HOST
+          value: "redis"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 5
+
+---
+# Auth Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: finrag4j
+spec:
+  selector:
+    app: auth-service
+  ports:
+  - port: 8081
+    targetPort: 8081
+
+---
+# Document Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: document-service
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: document-service
+  template:
+    metadata:
+      labels:
+        app: document-service
+    spec:
+      initContainers:
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
       - name: wait-for-postgres
         image: busybox:1.32
         command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
@@ -461,22 +879,209 @@ spec:
       - name: wait-for-python
         image: busybox:1.32
         command: ['sh', '-c', 'until nc -z python-service 8001; do echo waiting for python-service; sleep 2; done;']
+      containers:
+      - name: document-service
+        image: finrag4j/document-service:1.0.0
+        ports:
+        - containerPort: 8082
+        env:
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: PYTHON_SERVICE_URL
+          value: "http://python-service:8001"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8082
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8082
+          initialDelaySeconds: 30
+          periodSeconds: 5
 
 ---
-# Java Service
+# Document Service
 apiVersion: v1
 kind: Service
 metadata:
-  name: java-service
+  name: document-service
   namespace: finrag4j
 spec:
   selector:
-    app: java-service
+    app: document-service
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8082
+    targetPort: 8082
 
 ---
+# Search Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-service
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: search-service
+  template:
+    metadata:
+      labels:
+        app: search-service
+    spec:
+      initContainers:
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      containers:
+      - name: search-service
+        image: finrag4j/search-service:1.0.0
+        ports:
+        - containerPort: 8083
+        env:
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: REDIS_HOST
+          value: "redis"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 5
+
+---
+# Search Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-service
+  namespace: finrag4j
+spec:
+  selector:
+    app: search-service
+  ports:
+  - port: 8083
+    targetPort: 8083
+
+---
+# Agent Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+  namespace: finrag4j
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-service
+  template:
+    metadata:
+      labels:
+        app: agent-service
+    spec:
+      initContainers:
+      - name: wait-for-nacos
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z nacos 8080; do echo waiting for nacos; sleep 2; done;']
+      - name: wait-for-postgres
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      containers:
+      - name: agent-service
+        image: finrag4j/agent-service:1.0.0
+        ports:
+        - containerPort: 8086
+        env:
+        - name: NACOS_HOST
+          value: "nacos"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: ROCKETMQ_HOST
+          value: "rocketmq-namesrv"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8084
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8084
+          initialDelaySeconds: 30
+          periodSeconds: 5
+
+---
+# Agent Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+  namespace: finrag4j
+spec:
+  selector:
+    app: agent-service
+  ports:
+  - port: 8086
+    targetPort: 8086
+
+---
+# ========================================
+# 第4层: 前端服务
+# ========================================
+
 # Frontend Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -493,6 +1098,10 @@ spec:
       labels:
         app: frontend
     spec:
+      initContainers:
+      - name: wait-for-gateway
+        image: busybox:1.32
+        command: ['sh', '-c', 'until nc -z gateway 8080; do echo waiting for gateway; sleep 2; done;']
       containers:
       - name: frontend
         image: finrag4j/frontend:1.0.0
@@ -500,7 +1109,7 @@ spec:
         - containerPort: 80
         env:
         - name: VUE_APP_API_BASE_URL
-          value: "http://java-service:8080/api"
+          value: "http://gateway:8080/api"
         resources:
           requests:
             memory: "256Mi"
@@ -520,10 +1129,6 @@ spec:
             port: 80
           initialDelaySeconds: 15
           periodSeconds: 5
-      initContainers:
-      - name: wait-for-java
-        image: busybox:1.32
-        command: ['sh', '-c', 'until nc -z java-service 8080; do echo waiting for java-service; sleep 2; done;']
 
 ---
 # Frontend Service
@@ -564,13 +1169,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: java-service
+            name: gateway
             port:
-              number: 8080
-      - path: /doc.html
-        pathType: Prefix
-        backend:
-          service:
-            name: java-service
-            port:
-              number: 8080
+              number: 8085
