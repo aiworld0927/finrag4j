@@ -134,7 +134,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${NACOS_PORT:-8080}/nacos/v3/admin/core/state/readiness"]
+      test: ["CMD", "curl", "-f", "http://localhost:${NACOS_PORT_8848:-8848}/nacos/v3/admin/core/state/readiness"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -178,6 +178,12 @@ services:
           memory: ${ROCKETMQ_BROKER_MEMORY_LIMIT:-768M}
         reservations:
           memory: ${ROCKETMQ_BROKER_MEMORY_RESERVE:-256M}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep java || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   # ========================================
@@ -185,20 +191,23 @@ services:
   # ========================================
 
   # RocketMQ Dashboard（依赖 NameServer）
+  # 版本固定为 2.1.0，避免最新版本兼容性问题
+  # 端口映射: 8082 -> 8082 (内外端口一致)
   rocketmq-dashboard:
-    image: apacherocketmq/rocketmq-dashboard:latest
+    image: apacherocketmq/rocketmq-dashboard:2.1.0
     container_name: ${ROCKETMQ_DASHBOARD_CONTAINER_NAME:-finrag4j-rocketmq-dashboard}
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
+      - SERVER_PORT=8082
     ports:
-      - "${ROCKETMQ_DASHBOARD_PORT:-8088}:8080"
+      - "${ROCKETMQ_DASHBOARD_PORT:-8082}:8082"
     networks:
       - finrag4j-network
     depends_on:
       rocketmq-namesrv:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "curl", "-f", "http://localhost:${ROCKETMQ_DASHBOARD_PORT:-8082}"]
       interval: 10s
       timeout: 5s
       retries: 5
