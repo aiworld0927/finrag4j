@@ -17,6 +17,7 @@ FinRag4j Python 预处理微服务入口文件
 
 import os
 import io
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ from loguru import logger
 from typing import Optional, List, Dict, Any
 import uvicorn
 import datetime
+import asyncio
 
 # 导入配置和服务
 from config import (
@@ -35,15 +37,39 @@ from config import (
     LOG_LEVEL,
     LOG_ROTATION,
     LOG_RETENTION,
-    merge_nacos_config,
     NACOS_ENABLED,
     NACOS_HOST,
     NACOS_PORT
 )
 from services import document_parser, ocr_service, text_chunker, text_cleaner
+from services.nacos_service import nacos_registry
 
-# 从 Nacos 加载配置（启动时执行）
-merge_nacos_config()
+
+# ---------------------------
+# 生命周期管理（服务注册/注销）
+# ---------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI 应用生命周期管理"""
+    # 启动时：注册服务到 Nacos
+    if NACOS_ENABLED:
+        try:
+            init_success = await nacos_registry.init_client()
+            if init_success:
+                await nacos_registry.register()
+                logger.info(f"服务已注册到 Nacos: {nacos_registry.service_info}")
+        except Exception as e:
+            logger.error(f"Nacos 服务注册失败: {e}")
+
+    yield  # 服务运行中
+
+    # 关闭时：从 Nacos 注销服务
+    if nacos_registry.is_registered:
+        try:
+            await nacos_registry.deregister()
+            await nacos_registry.shutdown()
+        except Exception as e:
+            logger.error(f"Nacos 服务注销失败: {e}")
 
 # 配置日志
 logger.remove()
@@ -65,7 +91,8 @@ app = FastAPI(
     description="金融文档解析、OCR识别、文本清洗、文本分块服务（适配Nacos配置中心）",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan  # 添加生命周期管理
 )
 
 # 配置跨域
@@ -95,6 +122,7 @@ class HealthResponse(BaseModel):
     nacos_enabled: bool
     nacos_host: Optional[str]
     nacos_port: Optional[int]
+    nacos_registered: Optional[bool] = False
 
 
 class ParseFileResponse(BaseModel):
@@ -177,7 +205,8 @@ async def health_check():
         "message": "服务运行正常",
         "nacos_enabled": NACOS_ENABLED,
         "nacos_host": NACOS_HOST if NACOS_ENABLED else None,
-        "nacos_port": NACOS_PORT if NACOS_ENABLED else None
+        "nacos_port": NACOS_PORT if NACOS_ENABLED else None,
+        "nacos_registered": nacos_registry.is_registered
     }
 
 

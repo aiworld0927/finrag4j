@@ -50,7 +50,7 @@ __pycache__/
 .Python
 env/
 venv/
-.env
+# .env
 .env.local
 .env.production
 requirements.txt.bak

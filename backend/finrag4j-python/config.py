@@ -12,9 +12,12 @@ import os
 import json
 from dotenv import load_dotenv
 from loguru import logger
+from pathlib import Path
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量（优先使用当前目录的 .env 文件，不覆盖已存在的环境变量）
+env_file = Path(__file__).resolve().parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file, override=False)
 
 # ---------------------------
 # Nacos 配置中心配置
@@ -26,6 +29,17 @@ NACOS_NAMESPACE = os.getenv("NACOS_NAMESPACE", "public")
 NACOS_GROUP = os.getenv("NACOS_GROUP", "DEFAULT_GROUP")
 NACOS_DATA_ID = os.getenv("NACOS_DATA_ID", "finrag4j-python.yml")
 NACOS_TIMEOUT = int(os.getenv("NACOS_TIMEOUT", 30))
+NACOS_USERNAME = os.getenv("NACOS_USERNAME", "nacos")
+NACOS_PASSWORD = os.getenv("NACOS_PASSWORD", "nacos")
+
+# ---------------------------
+# Nacos 服务注册配置
+# ---------------------------
+NACOS_SERVICE_NAME = os.getenv("NACOS_SERVICE_NAME", "finrag4j-python")
+NACOS_SERVICE_GROUP = os.getenv("NACOS_SERVICE_GROUP", "DEFAULT_GROUP")
+NACOS_SERVICE_WEIGHT = float(os.getenv("NACOS_SERVICE_WEIGHT", "1.0"))
+NACOS_SERVICE_CLUSTER = os.getenv("NACOS_SERVICE_CLUSTER", "DEFAULT")
+NACOS_SERVICE_EPHEMERAL = os.getenv("NACOS_SERVICE_EPHEMERAL", "true").lower() == "true"
 
 # ---------------------------
 # 服务基础配置
@@ -149,7 +163,19 @@ IMAGE_ENABLE_ENHANCEMENT = True
 
 def load_config_from_nacos():
     """
-    从 Nacos 配置中心加载配置
+    从 Nacos 配置中心加载配置（使用官方 Python SDK v3.x）
+    :return: 配置字典，如果加载失败返回空字典
+    """
+    if not NACOS_ENABLED:
+        logger.info("Nacos 配置中心已禁用，使用本地配置")
+        return {}
+
+    return {}  # 配置加载移到 lifespan 中处理
+
+
+async def load_config_from_nacos_async():
+    """
+    异步从 Nacos 配置中心加载配置
     :return: 配置字典，如果加载失败返回空字典
     """
     if not NACOS_ENABLED:
@@ -157,30 +183,39 @@ def load_config_from_nacos():
         return {}
 
     try:
-        from nacos import NacosClient
+        from v2.nacos import NacosConfigService, ClientConfigBuilder, GRPCConfig, ConfigParam
+    except ImportError:
+        logger.warning("未安装 nacos-sdk-python，跳过 Nacos 配置加载。请运行: pip install nacos-sdk-python")
+        return {}
+
+    try:
+        logger.info(f"正在连接 Nacos 配置中心: {NACOS_HOST}:{NACOS_PORT} (用户: {NACOS_USERNAME})")
         
-        logger.info(f"正在连接 Nacos 配置中心: {NACOS_HOST}:{NACOS_PORT}")
-        
-        client = NacosClient(
-            server_addresses=f"{NACOS_HOST}:{NACOS_PORT}",
-            namespace=NACOS_NAMESPACE,
-            timeout=NACOS_TIMEOUT
-        )
-        
-        # 获取配置
-        config = client.get_config(
+        # Nacos 3.x 客户端使用主端口 8848，SDK 自动计算 gRPC 端口
+        client_config = (ClientConfigBuilder()
+            .server_address(f"{NACOS_HOST}:{NACOS_PORT}")
+            .username(NACOS_USERNAME)
+            .password(NACOS_PASSWORD)
+            .namespace_id(NACOS_NAMESPACE)
+            .log_level('WARNING')
+            .grpc_config(GRPCConfig(grpc_timeout=NACOS_TIMEOUT * 1000))
+            .build())
+
+        config_client = await NacosConfigService.create_config_service(client_config)
+
+        content = await config_client.get_config(ConfigParam(
             data_id=NACOS_DATA_ID,
             group=NACOS_GROUP
-        )
-        
-        if config:
+        ))
+
+        if content:
             logger.info(f"成功从 Nacos 加载配置: {NACOS_DATA_ID}")
             try:
-                return json.loads(config)
+                return json.loads(content)
             except json.JSONDecodeError:
                 # 如果不是JSON格式，尝试按行解析
                 config_dict = {}
-                for line in config.split('\n'):
+                for line in content.split('\n'):
                     line = line.strip()
                     if line and '=' in line and not line.startswith('#'):
                         key, value = line.split('=', 1)
@@ -189,18 +224,16 @@ def load_config_from_nacos():
         else:
             logger.warning(f"从 Nacos 获取配置为空: {NACOS_DATA_ID}")
             return {}
-            
-    except ImportError:
-        logger.warning("未安装 nacos-sdk-python，跳过 Nacos 配置加载")
-        return {}
+
     except Exception as e:
-        logger.error(f"从 Nacos 加载配置失败: {e}")
+        logger.warning(f"从 Nacos 加载配置失败: {e}")
         return {}
 
 
-def merge_nacos_config():
+def merge_nacos_config(nacos_config: dict = None):
     """
     合并 Nacos 配置到全局变量
+    :param nacos_config: 可选的配置字典，如果不提供则从 Nacos 加载
     """
     global SERVER_PORT, SERVER_HOST, DEBUG_MODE
     global OCR_MODEL_DIR, OCR_LANG, OCR_USE_GPU, OCR_TIMEOUT
@@ -210,7 +243,10 @@ def merge_nacos_config():
     if not NACOS_ENABLED:
         return
     
-    nacos_config = load_config_from_nacos()
+    # 如果没有提供配置，则从 Nacos 加载
+    if nacos_config is None:
+        nacos_config = load_config_from_nacos()
+    
     if not nacos_config:
         return
     
