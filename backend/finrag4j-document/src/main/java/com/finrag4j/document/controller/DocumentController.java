@@ -26,7 +26,7 @@ public class DocumentController {
     @Operation(summary = "上传文档", description = "上传文档到MinIO，并触发异步解析任务")
     public Result<Document> upload(@RequestParam("file") MultipartFile file,
                                    @RequestParam(value = "kbId", required = false) Long kbId,
-                                   @RequestParam(value = "tags", required = false) List<String> tags) {
+                                   @RequestParam(value = "tags", required = false) List<String> tags) throws Exception {
         return Result.success(documentService.upload(file, kbId, tags));
     }
 

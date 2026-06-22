@@ -2,9 +2,24 @@ server:
   port: 8080
 
 spring:
+  main:
+    web-application-type: reactive
+  application:
+    name: finrag4j-gateway
+  
   cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+    
     gateway:
-      # 全局CORS配置
       globalcors:
         add-to-simple-url-handler-mapping: true
         cors-configurations:
@@ -20,46 +35,70 @@ spring:
             allowCredentials: true
             maxAge: 3600
 
-      # 路由配置 - 使用服务发现
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-
       routes:
-        # Auth认证服务
-        - id: auth-service
+        - id: auth-service-auth
           uri: lb://finrag4j-auth
           predicates:
             - Path=/api/auth/**
           filters:
             - StripPrefix=1
 
-        # Document文档服务
+        - id: auth-service-users
+          uri: lb://finrag4j-auth
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=1
+
+        - id: auth-service-roles
+          uri: lb://finrag4j-auth
+          predicates:
+            - Path=/api/roles/**
+          filters:
+            - StripPrefix=1
+
+        - id: auth-service-permissions
+          uri: lb://finrag4j-auth
+          predicates:
+            - Path=/api/permissions/**
+          filters:
+            - StripPrefix=1
+
         - id: document-service
           uri: lb://finrag4j-document
           predicates:
-            - Path=/api/document/**
+            - Path=/api/document/**,/api/knowledge-base/**
           filters:
             - StripPrefix=1
 
-        # Search检索服务
-        - id: search-service
+        - id: search-service-vector
           uri: lb://finrag4j-search
           predicates:
-            - Path=/api/search/**
+            - Path=/api/vector/**
           filters:
             - StripPrefix=1
 
-        # Agent服务
-        - id: agent-service
+        - id: search-service-rag
+          uri: lb://finrag4j-search
+          predicates:
+            - Path=/api/rag/**
+          filters:
+            - StripPrefix=1
+
+        - id: agent-service-chat
+          uri: lb://finrag4j-agent
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - StripPrefix=1
+
+        - id: agent-service-business
           uri: lb://finrag4j-agent
           predicates:
             - Path=/api/agent/**
           filters:
             - StripPrefix=1
 
-  # Redis配置（用于限流）
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -67,7 +106,6 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: 0
 
-# 管理端点
 management:
   endpoints:
     web:

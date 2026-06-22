@@ -1,5 +1,6 @@
 package com.finrag4j.auth.controller;
 
+import com.finrag4j.auth.dto.RegisterRequest;
 import com.finrag4j.auth.entity.SysUser;
 import com.finrag4j.auth.service.AuthService;
 import com.finrag4j.common.Result;
@@ -58,13 +59,5 @@ public class AuthController {
     public static class LoginRequest {
         private String username;
         private String password;
-    }
-
-    @lombok.Data
-    public static class RegisterRequest {
-        private String username;
-        private String password;
-        private String email;
-        private String phone;
     }
 }

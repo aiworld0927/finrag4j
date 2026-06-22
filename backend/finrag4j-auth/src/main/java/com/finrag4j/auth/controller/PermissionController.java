@@ -43,7 +43,7 @@ public class PermissionController {
     @PostMapping
     @Operation(summary = "创建权限")
     public Result<Void> create(@RequestBody @Validated SysPermission permission) {
-        permissionService.create(permission);
+        permissionService.save(permission);
         return Result.success();
     }
 
@@ -51,14 +51,14 @@ public class PermissionController {
     @Operation(summary = "更新权限")
     public Result<Void> update(@PathVariable Long id, @RequestBody SysPermission permission) {
         permission.setId(id);
-        permissionService.update(permission);
+        permissionService.updateById(permission);
         return Result.success();
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除权限")
     public Result<Void> delete(@PathVariable Long id) {
-        permissionService.delete(id);
+        permissionService.removeById(id);
         return Result.success();
     }
 }

@@ -4,7 +4,8 @@
 
 本文档汇总FinRag4j全部REST API接口，供前端对接和第三方集成使用。
 
-**接口基础地址**: `http://localhost:8080/api`  
+**接口基础地址**: `http://localhost:8080`  
+**网关路径前缀**: `/api`  
 **认证方式**: Bearer Token  
 **文档版本**: v1.0.0
 
@@ -15,10 +16,13 @@
 ### 1.1 获取Token
 
 ```http
-POST /api/users/login
-Content-Type: application/x-www-form-urlencoded
+POST /api/auth/login
+Content-Type: application/json
 
-username=admin&password=admin123&tenantId=1
+{
+  "username": "admin",
+  "password": "password123"
+}
 ```
 
 **响应示例**:
@@ -28,11 +32,7 @@ username=admin&password=admin123&tenantId=1
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": {
-      "id": 1,
-      "username": "admin",
-      "nickname": "管理员"
-    }
+    "refreshToken": "..."
   }
 }
 ```
@@ -40,105 +40,80 @@ username=admin&password=admin123&tenantId=1
 ### 1.2 使用Token
 
 ```http
-GET /api/kb?tenantId=1
+GET /api/users
 Authorization: Bearer <token>
 ```
 
 ---
 
-## 2. 用户管理 API
+## 2. 认证管理 API (finrag4j-auth)
 
-### 2.1 获取用户列表
+### 2.1 用户认证
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/auth/login` | POST | 用户登录，返回JWT Token |
+| `/api/auth/register` | POST | 注册新用户 |
+| `/api/auth/logout` | POST | 用户登出，注销会话 |
+| `/api/auth/refresh` | POST | 使用Refresh Token刷新Access Token |
+| `/api/auth/me` | GET | 获取当前用户信息 |
+
+**登录请求示例**:
 ```http
-GET /api/users?tenantId=1
-Authorization: Bearer <token>
-```
+POST /api/auth/login
+Content-Type: application/json
 
-**响应示例**:
-```json
 {
-  "code": 200,
-  "data": [
-    {
-      "id": 1,
-      "username": "admin",
-      "nickname": "管理员",
-      "email": "wangjn1130@163.com",
-      "status": "active"
-    }
-  ]
+  "username": "zhangsan",
+  "password": "password123"
 }
 ```
 
-### 2.2 创建用户
-
+**注册请求示例**:
 ```http
-POST /api/users?tenantId=1
+POST /api/auth/register
 Content-Type: application/json
-Authorization: Bearer <token>
 
 {
   "username": "zhangsan",
   "password": "password123",
-  "nickname": "张三",
-  "email": "wangjn1130@163.com",
+  "email": "zhangsan@example.com",
   "phone": "13800138000"
 }
 ```
 
-### 2.3 更新用户
+### 2.2 用户管理
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/users` | GET | 分页查询用户列表 |
+| `/api/users/{id}` | GET | 获取用户详情 |
+| `/api/users` | POST | 创建用户 |
+| `/api/users/{id}` | PUT | 更新用户信息 |
+| `/api/users/{id}` | DELETE | 删除用户 |
+| `/api/users/{id}/status` | PUT | 更新用户状态（启用/禁用） |
+| `/api/users/{id}/roles` | POST | 为用户分配角色 |
+
+**分页查询示例**:
 ```http
-PUT /api/users/{id}
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "nickname": "新昵称",
-  "email": "wangjn1130@163.com"
-}
-```
-
-### 2.4 删除用户
-
-```http
-DELETE /api/users/{id}
+GET /api/users?pageNum=1&pageSize=10&username=张三&status=active
 Authorization: Bearer <token>
 ```
 
-### 2.5 获取用户角色
+### 2.3 角色管理
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/roles` | GET | 查询所有角色 |
+| `/api/roles/{id}` | GET | 获取角色详情 |
+| `/api/roles` | POST | 创建角色 |
+| `/api/roles/{id}` | PUT | 更新角色 |
+| `/api/roles/{id}` | DELETE | 删除角色 |
+| `/api/roles/{id}/permissions` | POST | 为角色分配权限 |
+
+**创建角色示例**:
 ```http
-GET /api/users/{userId}/roles?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 2.6 分配角色
-
-```http
-POST /api/users/{userId}/roles?tenantId=1
-Content-Type: application/json
-Authorization: Bearer <token>
-
-[1, 2, 3]
-```
-
----
-
-## 3. 角色权限 API
-
-### 3.1 获取角色列表
-
-```http
-GET /api/roles?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 3.2 创建角色
-
-```http
-POST /api/roles?tenantId=1
+POST /api/roles
 Content-Type: application/json
 Authorization: Bearer <token>
 
@@ -149,147 +124,148 @@ Authorization: Bearer <token>
 }
 ```
 
-### 3.3 分配权限
+### 2.4 权限管理
 
-```http
-POST /api/roles/{id}/permissions?tenantId=1
-Content-Type: application/json
-Authorization: Bearer <token>
-
-[1, 2, 3, 4, 5]
-```
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/permissions/tree` | GET | 获取权限菜单树 |
+| `/api/permissions` | GET | 查询所有权限 |
+| `/api/permissions/{id}` | GET | 获取权限详情 |
+| `/api/permissions` | POST | 创建权限 |
+| `/api/permissions/{id}` | PUT | 更新权限 |
+| `/api/permissions/{id}` | DELETE | 删除权限 |
 
 ---
 
-## 4. 知识库管理 API
+## 3. 文档管理 API (finrag4j-document)
 
-### 4.1 创建知识库
+### 3.1 文档管理
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/document/upload` | POST | 上传文档到MinIO |
+| `/api/document/{id}` | GET | 获取文档详情 |
+| `/api/document` | GET | 分页查询文档 |
+| `/api/document/{id}` | DELETE | 将文档放入回收站 |
+| `/api/document/{id}/recover` | POST | 从回收站恢复文档 |
+| `/api/document/{id}/permanent` | DELETE | 永久删除文档 |
+| `/api/document/{id}/versions` | GET | 获取文档版本历史 |
+| `/api/document/{id}/versions/{versionId}/restore` | POST | 恢复文档到指定版本 |
+| `/api/document/status/{taskId}` | GET | 查询文档处理状态 |
+
+**上传文档示例**:
 ```http
-POST /api/kb?tenantId=1
+POST /api/document/upload
+Content-Type: multipart/form-data
+Authorization: Bearer <token>
+
+file: <文件>
+kbId: 1
+tags: ["信贷", "合同"]
+```
+
+**分页查询示例**:
+```http
+GET /api/document?pageNum=1&pageSize=10&kbId=1&status=processed
+Authorization: Bearer <token>
+```
+
+### 3.2 知识库管理
+
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/knowledge-base` | GET | 查询所有知识库 |
+| `/api/knowledge-base/{id}` | GET | 获取知识库详情 |
+| `/api/knowledge-base` | POST | 创建知识库 |
+| `/api/knowledge-base/{id}` | PUT | 更新知识库 |
+| `/api/knowledge-base/{id}` | DELETE | 删除知识库 |
+| `/api/knowledge-base/{id}/documents/{docId}` | POST | 绑定文档到知识库 |
+| `/api/knowledge-base/{id}/documents/{docId}` | DELETE | 从知识库解绑文档 |
+
+**创建知识库示例**:
+```http
+POST /api/knowledge-base
 Content-Type: application/json
 Authorization: Bearer <token>
 
 {
   "kbName": "金融法规知识库",
   "kbCode": "finance_regulation",
-  "description": "收录各类金融监管法规",
-  "defaultModel": "qwen2:7b",
-  "similarityThreshold": 0.7,
-  "topK": 10
+  "description": "收录各类金融监管法规"
 }
 ```
 
-### 4.2 获取知识库列表
+---
 
+## 4. 搜索检索 API (finrag4j-search)
+
+### 4.1 向量管理
+
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/vector/chunk` | POST | 添加向量片段 |
+| `/api/vector/chunk/batch` | POST | 批量添加向量片段 |
+| `/api/vector/chunk/{id}` | DELETE | 删除向量片段 |
+| `/api/vector/document/{docId}` | DELETE | 删除文档的所有向量 |
+| `/api/vector/rebuild-index` | POST | 重建向量索引 |
+
+### 4.2 RAG检索
+
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/rag/retrieve` | POST | 混合检索（向量+关键词） |
+| `/api/rag/search` | POST | 纯语义向量搜索 |
+| `/api/rag/keyword-search` | POST | 基于BM25的关键词搜索 |
+
+**混合检索示例**:
 ```http
-GET /api/kb?tenantId=1
-Authorization: Bearer <token>
-```
-
-**响应示例**:
-```json
-{
-  "code": 200,
-  "data": [
-    {
-      "id": 1,
-      "kbName": "金融法规知识库",
-      "kbCode": "finance_regulation",
-      "description": "收录各类金融监管法规",
-      "status": "active",
-      "documentCount": 128
-    }
-  ]
-}
-```
-
-### 4.3 更新知识库
-
-```http
-PUT /api/kb/{id}
+POST /api/rag/retrieve
 Content-Type: application/json
 Authorization: Bearer <token>
 
 {
-  "kbName": "更新后的名称",
-  "similarityThreshold": 0.75
+  "query": "信贷业务合规要求",
+  "kbId": 1,
+  "topK": 10,
+  "similarityThreshold": 0.7,
+  "enableRerank": true
 }
-```
-
-### 4.4 删除知识库
-
-```http
-DELETE /api/kb/{id}?tenantId=1
-Authorization: Bearer <token>
 ```
 
 ---
 
-## 5. 文档管理 API
+## 5. 智能代理 API (finrag4j-agent)
 
-### 5.1 上传文档
+### 5.1 RAG聊天
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/chat/send` | POST | 发送消息获取AI回复 |
+| `/api/chat/history/{sessionId}` | GET | 获取聊天历史 |
+| `/api/chat/session/create` | POST | 创建会话 |
+| `/api/chat/session/{sessionId}` | DELETE | 删除会话 |
+| `/api/chat/session/{sessionId}/favorite/{messageId}` | POST | 收藏消息 |
+
+**发送消息示例**:
 ```http
-POST /api/documents/upload?tenantId=1
-Content-Type: multipart/form-data
+POST /api/chat/send
+Content-Type: application/json
 Authorization: Bearer <token>
 
-file: <文件>
+{
+  "sessionId": "abc123",
+  "message": "什么是信贷业务？",
+  "kbId": 1,
+  "agentType": "rag",
+  "useRerank": true
+}
 ```
 
 **响应示例**:
 ```json
 {
   "code": 200,
-  "data": {
-    "id": 1,
-    "fileName": "test.pdf",
-    "fileType": "PDF",
-    "status": "processing"
-  }
-}
-```
-
-### 5.2 获取文档列表
-
-```http
-GET /api/documents?tenantId=1&status=indexed
-Authorization: Bearer <token>
-```
-
-### 5.3 预览文档
-
-```http
-GET /api/documents/{id}/preview?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 5.4 删除文档
-
-```http
-DELETE /api/documents/{id}?tenantId=1
-Authorization: Bearer <token>
-```
-
----
-
-## 6. RAG问答 API
-
-### 6.1 开始新对话
-
-```http
-POST /api/chat/new
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-question=什么是信贷业务？&kbId=1&tenantId=1&userId=1
-```
-
-**响应示例**:
-```json
-{
-  "code": 200,
+  "message": "success",
   "data": {
     "sessionId": "abc123",
     "answer": "信贷业务是指...",
@@ -299,282 +275,105 @@ question=什么是信贷业务？&kbId=1&tenantId=1&userId=1
         "pageNum": 12,
         "similarity": 0.85
       }
-    ],
-    "similarity": 0.85,
-    "responseTime": 1250,
-    "modelName": "qwen2:7b"
-  }
-}
-```
-
-### 6.2 继续对话
-
-```http
-POST /api/chat/continue
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-sessionId=abc123&question=有哪些合规要求？&tenantId=1&userId=1
-```
-
-### 6.3 获取对话历史
-
-```http
-GET /api/chat/history/{sessionId}
-Authorization: Bearer <token>
-```
-
-### 6.4 获取最近对话
-
-```http
-GET /api/chat/recent?tenantId=1&userId=1&limit=10
-Authorization: Bearer <token>
-```
-
-### 6.5 添加收藏
-
-```http
-POST /api/chat/favorite
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-sessionId=abc123&chatId=1&userMessage=问题&aiMessage=回答&tenantId=1&userId=1
-```
-
-### 6.6 获取收藏列表
-
-```http
-GET /api/chat/favorites?tenantId=1&userId=1
-Authorization: Bearer <token>
-```
-
----
-
-## 7. 金融Agent API
-
-### 7.1 获取抽取模板
-
-```http
-GET /api/agent/extract/templates?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 7.2 创建抽取模板
-
-```http
-POST /api/agent/extract/template?tenantId=1
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "templateName": "信贷合同模板",
-  "fields": [
-    {"name": "借款人名称", "type": "string"},
-    {"name": "借款金额", "type": "string"},
-    {"name": "借款期限", "type": "string"}
-  ]
-}
-```
-
-### 7.3 执行信贷抽取
-
-```http
-POST /api/agent/extract/execute?documentId=1&templateId=1&tenantId=1
-Authorization: Bearer <token>
-```
-
-**响应示例**:
-```json
-{
-  "code": 200,
-  "data": {
-    "recordId": 1,
-    "extractedFields": [
-      {"field": "借款人名称", "value": "张三", "confidence": 0.98},
-      {"field": "借款金额", "value": "100万元", "confidence": 0.95}
     ]
   }
 }
 ```
 
-### 7.4 人工复核抽取结果
+### 5.2 合规检查
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/agent/compliance/check` | POST | 对文档进行合规检查 |
+| `/api/agent/compliance/report/{reportId}` | POST | 生成合规报告 |
+| `/api/agent/compliance/report/{reportId}` | GET | 获取合规报告 |
+
+**合规检查示例**:
 ```http
-POST /api/agent/extract/{recordId}/review
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-correctedResult={"借款人名称":"张三"}&comment=确认无误&reviewerId=1
-```
-
-### 7.5 创建合规自查报告
-
-```http
-POST /api/agent/compliance/report?tenantId=1&reportName=合规自查报告
+POST /api/agent/compliance/check
 Content-Type: application/json
 Authorization: Bearer <token>
 
-[1, 2, 3]
+{
+  "documentId": 1,
+  "checkType": "full"
+}
 ```
 
-### 7.6 执行合规检查
+### 5.3 信息抽取
 
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/agent/extraction/extract` | POST | 信贷材料信息抽取 |
+| `/api/agent/extraction/template` | POST | 创建抽取模板 |
+| `/api/agent/extraction/template/{id}` | GET | 获取抽取模板 |
+
+**信息抽取示例**:
 ```http
-POST /api/agent/compliance/check?reportId=1&tenantId=1
+POST /api/agent/extraction/extract
 Content-Type: application/json
 Authorization: Bearer <token>
 
-[1, 2, 3]
+{
+  "documentId": 1,
+  "templateId": 1,
+  "batchMode": false
+}
+```
+
+---
+
+## 6. Python预处理 API (finrag4j-python)
+
+Python预处理服务独立运行，不通过网关访问。
+
+### 6.1 健康检查
+
+```http
+GET /health
 ```
 
 **响应示例**:
 ```json
 {
-  "code": 200,
-  "data": {
-    "reportId": 1,
-    "highRisk": 2,
-    "mediumRisk": 5,
-    "lowRisk": 8,
-    "findings": [
-      {
-        "findingNo": "F-001",
-        "description": "合同条款未明确约定违约责任",
-        "riskLevel": "high",
-        "suggestion": "补充违约责任条款"
-      }
-    ]
-  }
+  "status": "healthy",
+  "service": "finrag4j-python",
+  "timestamp": "2024-01-01T12:00:00",
+  "version": "1.0.0",
+  "nacos_enabled": true,
+  "nacos_registered": true
 }
 ```
 
-### 7.7 复核合规报告
+### 6.2 文档解析
 
-```http
-POST /api/agent/compliance/report/{reportId}/review
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-comment=已确认整改方案&reviewerId=1
-```
-
-### 7.8 制度咨询
-
-```http
-POST /api/agent/regulation/query?question=信贷业务有哪些合规要求？&tenantId=1
-Authorization: Bearer <token>
-```
+| API路径 | HTTP方法 | 功能描述 |
+|---------|----------|----------|
+| `/api/parse/file` | POST | 通用文档解析（PDF/Word/Excel/TXT） |
+| `/api/parse/ocr` | POST | OCR识别 |
+| `/api/parse/text/clean` | POST | 文本清洗 |
+| `/api/parse/text/chunk` | POST | 文本分块 |
 
 ---
 
-## 8. 工作流 API
+## 7. 网关路由说明
 
-### 8.1 创建工作流
-
-```http
-POST /api/workflow/definitions?tenantId=1
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "workflowName": "文档审批流程",
-  "workflowCode": "doc_approval",
-  "workflowJson": "{...}",
-  "triggerType": "manual"
-}
-```
-
-### 8.2 获取工作流列表
-
-```http
-GET /api/workflow/definitions?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 8.3 触发工作流
-
-```http
-POST /api/workflow/trigger?workflowCode=doc_approval&tenantId=1
-Authorization: Bearer <token>
-```
-
-### 8.4 获取待办任务
-
-```http
-GET /api/workflow/tasks/pending?assigneeId=1
-Authorization: Bearer <token>
-```
-
-### 8.5 完成任务
-
-```http
-POST /api/workflow/tasks/{taskId}/complete
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <token>
-
-comment=同意&approved=true
-```
-
-### 8.6 获取执行日志
-
-```http
-GET /api/workflow/instances/{id}/logs
-Authorization: Bearer <token>
-```
+| 路径前缀 | 目标服务 | 说明 |
+|----------|----------|------|
+| `/api/auth/**` | finrag4j-auth | 认证接口 |
+| `/api/users/**` | finrag4j-auth | 用户管理接口 |
+| `/api/roles/**` | finrag4j-auth | 角色管理接口 |
+| `/api/permissions/**` | finrag4j-auth | 权限管理接口 |
+| `/api/document/**` | finrag4j-document | 文档管理接口 |
+| `/api/knowledge-base/**` | finrag4j-document | 知识库管理接口 |
+| `/api/vector/**` | finrag4j-search | 向量管理接口 |
+| `/api/rag/**` | finrag4j-search | RAG检索接口 |
+| `/api/chat/**` | finrag4j-agent | 聊天接口 |
+| `/api/agent/**` | finrag4j-agent | 业务Agent接口 |
 
 ---
 
-## 9. 审计日志 API
-
-### 9.1 按时间范围查询
-
-```http
-GET /api/audit/time-range?tenantId=1&startTime=2024-01-01 00:00:00&endTime=2024-01-31 23:59:59
-Authorization: Bearer <token>
-```
-
-### 9.2 按用户查询
-
-```http
-GET /api/audit/user/{userId}
-Authorization: Bearer <token>
-```
-
-### 9.3 导出Excel
-
-```http
-GET /api/audit/export/excel?tenantId=1&startTime=2024-01-01 00:00:00&endTime=2024-01-31 23:59:59
-Authorization: Bearer <token>
-```
-
----
-
-## 10. 系统配置 API
-
-### 10.1 获取系统配置
-
-```http
-GET /api/config?tenantId=1
-Authorization: Bearer <token>
-```
-
-### 10.2 更新系统配置
-
-```http
-PUT /api/config?tenantId=1
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "similarityThreshold": 0.7,
-  "chunkSize": 500,
-  "maxConcurrentRequests": 100
-}
-```
-
----
-
-## 11. 错误码说明
+## 8. 错误码说明
 
 | 错误码 | 说明 |
 |--------|------|
@@ -587,6 +386,20 @@ Authorization: Bearer <token>
 
 ---
 
+## 9. 模块接口统计
+
+| 模块 | Controller数量 | 接口数量 |
+|------|---------------|----------|
+| finrag4j-auth | 4 | 18 |
+| finrag4j-document | 2 | 14 |
+| finrag4j-search | 2 | 7 |
+| finrag4j-agent | 2 | 9 |
+| finrag4j-python | 1 | 5 |
+| **总计** | **11** | **53** |
+
+---
+
 **文档版本**: v1.0.0  
-**更新日期**: 2024年  
-**前端API文件**: `frontend/src/api/`
+**更新日期**: 2026年6月  
+**前端API文件**: `frontend/src/api/`  
+**Swagger文档**: `http://localhost:8080/docs`

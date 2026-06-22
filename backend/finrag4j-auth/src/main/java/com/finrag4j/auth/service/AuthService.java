@@ -1,5 +1,6 @@
 package com.finrag4j.auth.service;
 
+import com.finrag4j.auth.dto.RegisterRequest;
 import com.finrag4j.auth.entity.SysUser;
 import com.finrag4j.auth.mapper.SysUserMapper;
 import com.finrag4j.common.BusinessException;
@@ -48,7 +49,7 @@ public class AuthService {
     /**
      * 用户注册
      */
-    public void register(AuthController.RegisterRequest request) {
+    public void register(RegisterRequest request) {
         // 检查用户名是否存在
         SysUser existUser = userMapper.selectOne(
                 new LambdaQueryWrapper<SysUser>()

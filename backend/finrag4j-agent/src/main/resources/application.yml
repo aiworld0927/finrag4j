@@ -19,6 +19,18 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: 0
 
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+
 # LangChain4j配置
 langchain4j:
   model:

@@ -39,7 +39,7 @@ public class ChatController {
 
     @PostMapping("/session/create")
     @Operation(summary = "创建会话")
-    public Result<Map<String, Object>> createSession(@RequestBody CreateSessionRequest request) {
+    public Result<Map<String, Object>> createSession(@RequestBody ChatSessionService.CreateSessionRequest request) {
         return Result.success(chatSessionService.createSession(request));
     }
 
@@ -64,12 +64,5 @@ public class ChatController {
         private Long kbId;
         private String agentType;  // rag, compliance, extraction
         private Boolean useRerank = true;
-    }
-
-    @lombok.Data
-    public static class CreateSessionRequest {
-        private String title;
-        private Long kbId;
-        private String agentType;
     }
 }

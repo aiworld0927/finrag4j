@@ -3,9 +3,9 @@
     <div class="login-box">
       <div class="login-header">
         <div class="logo">
-          <el-icon :size="48" color="#1890ff">
-            <component :is="icons.Brain" />
-          </el-icon>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="#1890ff">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
         </div>
         <h1>FinRag4j</h1>
         <p>金融大模型RAG应用框架</p>
@@ -55,7 +55,6 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { icons } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 
 const router = useRouter()

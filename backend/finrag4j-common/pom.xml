@@ -95,6 +95,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Druid DataSource -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+            <version>1.2.20</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

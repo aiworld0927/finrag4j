@@ -17,10 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.digest.DigestUtils;
+import org.springframework.util.DigestUtils;
 
 /**
  * 文档服务
@@ -39,48 +40,44 @@ public class DocumentService extends ServiceImpl<DocumentMapper, Document> {
      * 上传文档
      */
     @Transactional
-    public Document upload(MultipartFile file, Long kbId, List<String> tags) {
-        try {
-            // 计算MD5
-            String md5 = DigestUtils.md5Hex(file.getInputStream());
+    public Document upload(MultipartFile file, Long kbId, List<String> tags) throws Exception {
+        // 计算MD5
+        String md5 = DigestUtils.md5DigestAsHex(file.getBytes());
 
-            // 检查是否已存在相同MD5的文档
-            Document existDoc = documentMapper.selectOne(
-                    new LambdaQueryWrapper<Document>()
-                            .eq(Document::getMd5, md5)
-                            .eq(Document::getDeleted, 0)
-            );
+        // 检查是否已存在相同MD5的文档
+        Document existDoc = documentMapper.selectOne(
+                new LambdaQueryWrapper<Document>()
+                        .eq(Document::getMd5, md5)
+                        .eq(Document::getDeleted, 0)
+        );
 
-            if (existDoc != null) {
-                throw new BusinessException(400, "相同文件已存在: " + existDoc.getName());
-            }
-
-            // 上传到MinIO
-            String filePath = minioService.upload(file);
-
-            // 创建文档记录
-            Document doc = new Document();
-            doc.setName(file.getOriginalFilename());
-            doc.setFilePath(filePath);
-            doc.setFileSize(String.valueOf(file.getSize()));
-            doc.setFileType(getFileType(file.getOriginalFilename()));
-            doc.setMd5(md5);
-            doc.setKbId(kbId);
-            doc.setStatus("uploading");
-            doc.setTaskId(UUID.randomUUID().toString());
-            doc.setUserId(1L); // TODO: 从上下文获取
-            doc.setTenantId(1L); // TODO: 从上下文获取
-            doc.setVersion(1);
-
-            documentMapper.insert(doc);
-
-            // 触发异步解析任务
-            pythonParseClient.submitParseTask(doc.getId(), filePath);
-
-            return doc;
-        } catch (Exception e) {
-            throw new BusinessException(500, "上传失败: " + e.getMessage());
+        if (existDoc != null) {
+            throw new BusinessException(400, "相同文件已存在: " + existDoc.getName());
         }
+
+        // 上传到MinIO
+        String filePath = minioService.upload(file);
+
+        // 创建文档记录
+        Document doc = new Document();
+        doc.setName(file.getOriginalFilename());
+        doc.setFilePath(filePath);
+        doc.setFileSize(String.valueOf(file.getSize()));
+        doc.setFileType(getFileType(file.getOriginalFilename()));
+        doc.setMd5(md5);
+        doc.setKbId(kbId);
+        doc.setStatus("uploading");
+        doc.setTaskId(UUID.randomUUID().toString());
+        doc.setUserId(1L); // TODO: 从上下文获取
+        doc.setTenantId(1L); // TODO: 从上下文获取
+        doc.setVersion(1);
+
+        documentMapper.insert(doc);
+
+        // 触发异步解析任务
+        pythonParseClient.submitParseTask(doc.getId(), filePath);
+
+        return doc;
     }
 
     /**

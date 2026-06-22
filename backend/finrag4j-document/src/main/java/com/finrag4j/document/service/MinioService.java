@@ -3,6 +3,8 @@ package com.finrag4j.document.service;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.http.Method;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -102,7 +104,14 @@ public class MinioService {
                     .credentials(accessKey, secretKey)
                     .build();
 
-            return client.presignedGetObject(bucket, objectName, 3600);
+            return client.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(bucket)
+                            .object(objectName)
+                            .expiry(3600)
+                            .build()
+            );
         } catch (Exception e) {
             return null;
         }
