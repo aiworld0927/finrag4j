@@ -82,7 +82,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Database, LayoutDashboard, MessageSquare, Robot, FlowChart, Settings, Activity, ChevronDown, ChevronRight, Bell, User, LogOut } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()

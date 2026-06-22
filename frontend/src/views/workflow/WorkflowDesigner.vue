@@ -111,7 +111,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { icons } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
 const workflowName = ref('新建工作流')

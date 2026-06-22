@@ -62,7 +62,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { icons } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
 const filter = reactive({

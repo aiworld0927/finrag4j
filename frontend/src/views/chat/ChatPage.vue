@@ -88,7 +88,7 @@
 
 <script setup>
 import { ref, reactive, nextTick } from 'vue'
-import { icons } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
 const messagesContainer = ref(null)

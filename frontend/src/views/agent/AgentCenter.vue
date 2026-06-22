@@ -149,7 +149,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { icons } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
 const showExtractModal = ref(false)

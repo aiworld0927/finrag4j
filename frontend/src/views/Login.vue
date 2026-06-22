@@ -11,39 +11,40 @@
         <p>金融大模型RAG应用框架</p>
       </div>
       
-      <el-form ref="loginForm" :model="form" class="login-form" @submit.prevent="handleLogin">
-        <el-form-item prop="username" label="用户名">
+      <div class="login-form">
+        <div class="form-group">
+          <label class="form-label">用户名</label>
           <el-input 
             v-model="form.username" 
             placeholder="请输入用户名"
-            prefix-icon="User"
+            class="form-input"
           />
-        </el-form-item>
+        </div>
         
-        <el-form-item prop="password" label="密码">
+        <div class="form-group">
+          <label class="form-label">密码</label>
           <el-input 
             v-model="form.password" 
             type="password" 
             placeholder="请输入密码"
-            prefix-icon="Lock"
+            class="form-input"
             @keyup.enter="handleLogin"
           />
-        </el-form-item>
+        </div>
         
-        <el-form-item prop="tenantId" label="租户ID">
+        <div class="form-group">
+          <label class="form-label">租户ID</label>
           <el-input 
             v-model.number="form.tenantId" 
             placeholder="请输入租户ID"
-            prefix-icon="Building"
+            class="form-input"
           />
-        </el-form-item>
+        </div>
         
-        <el-form-item>
-          <el-button type="primary" class="login-btn" @click="handleLogin">
-            登录
-          </el-button>
-        </el-form-item>
-      </el-form>
+        <el-button type="primary" class="login-btn" @click="handleLogin">
+          登录
+        </el-button>
+      </div>
       
       <div class="login-footer">
         <span>开源版 | 企业版</span>
@@ -53,12 +54,11 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { login } from '@/api/auth'
 
 const router = useRouter()
-const loginForm = ref(null)
 
 const form = reactive({
   username: '',
@@ -119,11 +119,33 @@ const handleLogin = async () => {
 }
 
 .login-form {
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-label {
+    display: block;
+    padding: 0 0 8px 0;
+    font-weight: 500;
+    color: #374151;
+    font-size: 14px;
+  }
+  
+  .form-input {
+    width: 100%;
+    
+    :deep(.el-input__wrapper) {
+      height: 40px;
+      border-radius: 6px;
+    }
+  }
+  
   .login-btn {
     width: 100%;
     height: 44px;
     font-size: 16px;
-    margin-top: 16px;
+    margin-top: 8px;
+    border-radius: 6px;
   }
 }
 

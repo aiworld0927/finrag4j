@@ -95,7 +95,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { icons } from '@element-plus/icons-vue'
+import { icons } from '@/utils/icons'
 
 const showCreateModal = ref(false)
 const isEdit = ref(false)
