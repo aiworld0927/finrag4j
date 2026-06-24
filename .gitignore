@@ -80,7 +80,6 @@ desktop.ini
 # Application specific
 *.db
 *.sqlite
-*.sql
 config/application-local.yml
 config/application.yml
 application.properties
@@ -106,7 +105,7 @@ demo-data/*.xlsx
 demo-data/*.txt
 demo-data/*.json
 demo-data/*.xml
-
+deploy/data
 # Logs
 logs/
 *.log

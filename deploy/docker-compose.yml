@@ -112,11 +112,11 @@ services:
       - ROCKETMQ_HOST=rocketmq-namesrv
       - PYTHON_SERVICE_URL=http://python-service:8001
     ports:
-      - "${DOCUMENT_PORT:-8082}:8082"
+      - "${DOCUMENT_PORT:-9082}:8082"
     networks:
       - finrag4j-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${DOCUMENT_PORT:-8082}/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${DOCUMENT_PORT:-9082}/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5

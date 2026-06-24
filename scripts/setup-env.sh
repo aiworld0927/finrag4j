@@ -23,8 +23,8 @@ case $ENV_NAME in
         NACOS_PORT=8848
         ;;
     devcompany)
-        MIDDLEWARE_HOST=192.168.222.186
-        NACOS_PORT=8080
+        MIDDLEWARE_HOST=192.168.222.188
+        NACOS_PORT=8848
         ;;
     *)
         echo "未知环境: $ENV_NAME，使用默认值"
@@ -142,7 +142,7 @@ echo "[5/6] 配置服务端口..."
 
 export GATEWAY_PORT=8085
 export AUTH_PORT=8081
-export DOCUMENT_PORT=8082
+export DOCUMENT_PORT=9082
 export SEARCH_PORT=8083
 export AGENT_PORT=8086
 export PYTHON_SERVICE_PORT=8001

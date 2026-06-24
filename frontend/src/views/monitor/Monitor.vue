@@ -150,7 +150,7 @@ const stats = reactive({
 const services = ref([
   { name: 'Gateway', host: '11.0.1.190:8080', status: 'running', responseTime: 23 },
   { name: 'Auth', host: '11.0.1.190:8081', status: 'running', responseTime: 15 },
-  { name: 'Document', host: '11.0.1.190:8082', status: 'running', responseTime: 45 },
+  { name: 'Document', host: '11.0.1.190:9082', status: 'running', responseTime: 45 },
   { name: 'Search', host: '11.0.1.190:8083', status: 'running', responseTime: 32 },
   { name: 'Agent', host: '11.0.1.190:8084', status: 'running', responseTime: 58 },
   { name: 'Python', host: '11.0.1.190:8090', status: 'running', responseTime: 18 }

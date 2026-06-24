@@ -118,7 +118,7 @@ FinRag4j/
 │   │       ├── controller/     # 用户、角色、权限控制器
 │   │       ├── service/        # 认证、RBAC、JWT服务
 │   │       └── mapper/          # 数据访问层
-│   ├── finrag4j-document/      # 📄 文档服务 (Port: 8082)
+│   ├── finrag4j-document/      # 📄 文档服务 (Port: 9082)
 │   │   └── src/main/java/com/finrag4j/document/
 │   │       ├── controller/     # 文档、知识库控制器
 │   │       ├── service/        # 文档上传、MinIO存储服务
