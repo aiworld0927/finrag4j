@@ -85,6 +85,18 @@ import { useRouter, useRoute } from 'vue-router'
 import { icons } from '@/utils/icons'
 import { ElMessage } from 'element-plus'
 
+const { 
+  LayoutDashboard, 
+  Database, 
+  MessageSquare, 
+  Robot, 
+  FlowChart, 
+  Settings, 
+  Activity,
+  ChevronDown,
+  ChevronRight
+} = icons
+
 const router = useRouter()
 const route = useRoute()
 

@@ -80,9 +80,6 @@ desktop.ini
 # Application specific
 *.db
 *.sqlite
-config/application-local.yml
-config/application.yml
-application.properties
 *.key
 *.pem
 *.crt

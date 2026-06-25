@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinRag4j - 金融大模型RAG应用框架</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 18px;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        .card-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .feature-item {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .feature-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .feature-desc {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .tech-tag {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .highlight {
+            color: #6a9955;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: bold;
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .contact-info {
+            text-align: center;
+            padding: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            color: #fff;
+        }
+
+        .contact-link {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 16px;
+        }
+
+        .contact-link:hover {
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            color: rgba(255,255,255,0.7);
+            margin-top: 40px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .logo {
+                font-size: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">FinRag4j</div>
+            <div class="tagline">金融大模型RAG应用框架 | 企业级知识问答解决方案</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🚀 项目亮点</div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">💰</div>
+                    <div class="feature-name">金融垂直</div>
+                    <div class="feature-desc">预置金融知识库、合规检查、信贷抽取</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔒</div>
+                    <div class="feature-name">私有化部署</div>
+                    <div class="feature-desc">数据不出域，满足金融合规要求</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📦</div>
+                    <div class="feature-name">开箱即用</div>
+                    <div class="feature-desc">完整前后端、一键部署、快速落地</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔧</div>
+                    <div class="feature-name">灵活扩展</div>
+                    <div class="feature-desc">工作流编排、Agent定制、模型路由</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🛠️ 技术栈</div>
+            <div class="tech-stack">
+                <span class="tech-tag">Java 21</span>
+                <span class="tech-tag">SpringBoot 3.2</span>
+                <span class="tech-tag">Spring Cloud</span>
+                <span class="tech-tag">Vue 3</span>
+                <span class="tech-tag">PostgreSQL</span>
+                <span class="tech-tag">PGVector</span>
+                <span class="tech-tag">Redis</span>
+                <span class="tech-tag">RocketMQ</span>
+                <span class="tech-tag">MinIO</span>
+                <span class="tech-tag">Python</span>
+                <span class="tech-tag">FastAPI</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📊 功能模块</div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-name">认证授权</div>
+                    <div class="feature-desc">JWT认证、RBAC权限管理</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📚</div>
+                    <div class="feature-name">知识库管理</div>
+                    <div class="feature-desc">文档上传、解析、向量化</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🤖</div>
+                    <div class="feature-name">RAG问答</div>
+                    <div class="feature-desc">智能问答、来源溯源</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">⚖️</div>
+                    <div class="feature-name">金融Agent</div>
+                    <div class="feature-desc">合规自查、合同抽取</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">💻 快速开始</div>
+            <div class="code-block">
+                <span class="highlight">#</span> 克隆项目<br>
+                git clone https://github.com/finrag4j/finrag4j.git<br><br>
+                <span class="highlight">#</span> 进入项目目录<br>
+                cd finrag4j<br><br>
+                <span class="highlight">#</span> 一键启动（需要Docker）<br>
+                ./scripts/start.sh
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📝 贡献指南</div>
+            <ol style="padding-left: 25px; line-height: 2;">
+                <li>Fork 本项目</li>
+                <li>创建功能分支 <code>feature/xxx</code></li>
+                <li>提交代码</li>
+                <li>创建 Pull Request</li>
+                <li>代码审查通过后合并</li>
+            </ol>
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="https://github.com/finrag4j/finrag4j" class="btn">GitHub</a>
+                <a href="https://gitee.com/finrag4j/finrag4j" class="btn btn-secondary">Gitee</a>
+            </div>
+        </div>
+
+        <div class="contact-info">
+            <h3 style="margin-bottom: 15px;">📬 联系方式</h3>
+            <a href="https://github.com/finrag4j/finrag4j" class="contact-link">GitHub</a>
+            <a href="https://gitee.com/finrag4j/finrag4j" class="contact-link">Gitee</a>
+            <a href="https://discord.gg/finrag4j" class="contact-link">Discord</a>
+            <a href="mailto:contact@finrag4j.com" class="contact-link">Email</a>
+        </div>
+
+        <div class="footer">
+            <p>FinRag4j - 金融大模型RAG应用框架</p>
+            <p style="margin-top: 5px;">Apache 2.0 License | 2026</p>
+        </div>
+    </div>
+</body>
+</html>

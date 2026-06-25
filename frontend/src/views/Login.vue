@@ -69,9 +69,12 @@ const form = reactive({
 const handleLogin = async () => {
   try {
     const response = await login(form)
-    if (response.success) {
-      localStorage.setItem('token', response.data.token)
-      localStorage.setItem('user', JSON.stringify(response.data.user))
+    if (response.code === 200) {
+      localStorage.setItem('token', response.data.accessToken)
+      localStorage.setItem('user', JSON.stringify({ 
+        username: response.data.username, 
+        userId: response.data.userId 
+      }))
       router.push('/')
     }
   } catch (error) {
